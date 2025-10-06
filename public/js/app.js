@@ -85,35 +85,78 @@ function invalidateCache(cacheKey) {
   }
 }
 
-// Função para forçar recarregamento de dados
-async function forceReloadData() {
-  invalidateCache('all');
-  
-  try {
-    // Recarrega dados da página atual
-    switch (currentPage) {
-      case 'produtos':
-        await carregarProdutos(true);
-        break;
-      case 'orcamentos':
-        await carregarOrcamentos(true);
-        break;
-      case 'usuarios':
-        if (usuarioAtual?.admin) {
-          await carregarUsuarios(true);
-        }
-        break;
-      case 'registros':
-        if (usuarioAtual?.admin) {
-          await carregarRegistros(true);
-        }
-        break;
+const SYNC_STATUS_TEXT = {
+  connecting: 'Conectando...',
+  connected: 'Sincronizado',
+  offline: 'Offline',
+  reconnecting: 'Reconectando...',
+  syncing: 'Sincronizando...'
+};
+
+function updateSyncStatus(state) {
+  if (!syncStatus || !syncStatusText) return;
+  syncStatus.dataset.state = state;
+  syncStatusText.textContent = SYNC_STATUS_TEXT[state] || SYNC_STATUS_TEXT.syncing;
+  syncStatus.setAttribute('aria-live', state === 'offline' ? 'assertive' : 'polite');
+}
+
+let isFullSyncInProgress = false;
+let hasConnectedToEvents = false;
+
+async function syncAllData({ showToast = false } = {}) {
+  if (!navigator.onLine) {
+    updateSyncStatus('offline');
+    if (showToast) {
+      mostrarToast('Sem conexão para sincronizar os dados.', 'warning');
     }
-    
-    mostrarToast('Dados atualizados com sucesso!', 'success');
+    return;
+  }
+
+  if (!usuarioAtual) {
+    updateSyncStatus('offline');
+    return;
+  }
+
+  if (isFullSyncInProgress) {
+    return;
+  }
+
+  isFullSyncInProgress = true;
+  updateSyncStatus('syncing');
+
+  invalidateCache('all');
+
+  const tarefas = [
+    carregarProdutos(true),
+    carregarTemplates(true),
+    carregarOrcamentos(true)
+  ];
+
+  if (usuarioAtual?.admin) {
+    tarefas.push(carregarUsuarios());
+    tarefas.push(carregarRegistros());
+  }
+
+  try {
+    const resultados = await Promise.allSettled(tarefas);
+    const houveErro = resultados.some((resultado) => resultado.status === 'rejected');
+
+    if (houveErro) {
+      console.warn('Nem todos os dados foram sincronizados corretamente.', resultados);
+      if (showToast) {
+        mostrarToast('Alguns dados não foram sincronizados.', 'warning');
+      }
+    } else if (showToast) {
+      mostrarToast('Dados sincronizados automaticamente!', 'success');
+    }
   } catch (error) {
-    console.error('Erro ao recarregar dados:', error);
-    mostrarToast('Erro ao atualizar dados', 'error');
+    console.error('Erro ao sincronizar dados automaticamente:', error);
+    if (showToast) {
+      mostrarToast('Erro ao sincronizar dados automaticamente.', 'error');
+    }
+  } finally {
+    isFullSyncInProgress = false;
+    updateSyncStatus(navigator.onLine ? 'connected' : 'offline');
   }
 }
 
@@ -121,14 +164,40 @@ function connectEventSource() {
   if (eventSource) {
     eventSource.close();
   }
+
+  if (!navigator.onLine) {
+    updateSyncStatus('offline');
+    eventSource = null;
+    return;
+  }
+
+  updateSyncStatus('connecting');
+
   eventSource = new EventSource('/api/events');
+
   eventSource.addEventListener('produtos-updated', () => carregarProdutos(true));
   eventSource.addEventListener('orcamentos-updated', () => carregarOrcamentos(true));
   eventSource.addEventListener('usuarios-updated', () => {
-    if (usuarioAtual?.admin) carregarUsuarios(true);
+    if (usuarioAtual?.admin) carregarUsuarios();
   });
+  eventSource.addEventListener('connected', () => {
+    updateSyncStatus('connected');
+  });
+
+  eventSource.onopen = async () => {
+    const reconectando = hasConnectedToEvents;
+    hasConnectedToEvents = true;
+    updateSyncStatus('connected');
+
+    if (reconectando) {
+      await syncAllData();
+    }
+  };
+
   eventSource.onerror = () => {
+    updateSyncStatus(navigator.onLine ? 'reconnecting' : 'offline');
     eventSource.close();
+    eventSource = null;
     setTimeout(connectEventSource, 5000);
   };
 }
@@ -169,7 +238,12 @@ const confirmOk = document.getElementById("confirm-ok");
 const confirmCancel = document.getElementById("confirm-cancel");
 
 // Elementos do header
-const refreshBtn = document.getElementById("refresh-btn");
+const syncStatus = document.getElementById("sync-status");
+const syncStatusText = syncStatus ? syncStatus.querySelector('.sync-text') : null;
+
+if (syncStatus) {
+  updateSyncStatus(navigator.onLine ? 'connecting' : 'offline');
+}
 
 // Elementos de login
 const loginModal = document.getElementById("login-modal");
@@ -241,13 +315,21 @@ function atualizarDisponibilidadeOnline() {
   }
 }
 
-window.addEventListener('online', () => {
+window.addEventListener('online', async () => {
   atualizarDisponibilidadeOnline();
-  processarFilaOffline();
+  updateSyncStatus('connecting');
   mostrarToast('Conectado');
+  connectEventSource();
+  await processarFilaOffline();
 });
+
 window.addEventListener('offline', () => {
   atualizarDisponibilidadeOnline();
+  updateSyncStatus('offline');
+  if (eventSource) {
+    eventSource.close();
+    eventSource = null;
+  }
   mostrarToast('Você está offline');
 });
 
@@ -460,7 +542,12 @@ async function verificarSessao() {
       loginModal.classList.remove('active');
     } else {
       localStorage.removeItem('usuarioAtual');
-      if (eventSource) { eventSource.close(); eventSource = null; }
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      hasConnectedToEvents = false;
+      updateSyncStatus('offline');
       loginModal.classList.add('active');
       if (loginForm) {
         loginForm.addEventListener('submit', async (e) => {
@@ -478,7 +565,12 @@ async function verificarSessao() {
       loginModal.classList.remove('active');
     } else {
       console.error('Falha ao verificar sessão', e);
-      if (eventSource) { eventSource.close(); eventSource = null; }
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      hasConnectedToEvents = false;
+      updateSyncStatus('offline');
       loginModal.classList.add('active');
     }
   }
@@ -580,21 +672,6 @@ function initNavigation() {
   });
   menuClose.addEventListener("click", fecharMenu);
   overlay.addEventListener("click", fecharMenu);
-  
-  // Event listener para botão de atualização
-  if (refreshBtn) {
-    refreshBtn.addEventListener("click", async () => {
-      refreshBtn.disabled = true;
-      refreshBtn.querySelector('.material-icons').style.animation = 'spin 1s linear infinite';
-      
-      try {
-        await forceReloadData();
-      } finally {
-        refreshBtn.disabled = false;
-        refreshBtn.querySelector('.material-icons').style.animation = '';
-      }
-    });
-  }
   
   menuItems.forEach((item) => {
     item.addEventListener("click", async (e) => {
@@ -782,6 +859,8 @@ function initPerfilPage() {
       eventSource.close();
       eventSource = null;
     }
+    hasConnectedToEvents = false;
+    updateSyncStatus('offline');
     usuarioAtual = null;
     localStorage.removeItem('usuarioAtual');
     loginModal.classList.add('active');
@@ -1992,7 +2071,7 @@ async function processarFilaOffline() {
   salvarFilaOffline();
   if (offlineQueue.length === 0) {
     mostrarToast('Sincronização concluída');
-    await carregarDadosIniciais();
+    await syncAllData();
   } else {
     mostrarToast('Algumas ações não foram sincronizadas');
   }

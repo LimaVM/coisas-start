@@ -43,9 +43,10 @@
           <h1>Start Orçamentos</h1>
         </div>
         <div class="header-actions">
-          <button id="refresh-btn" class="btn-icon" aria-label="Atualizar dados" title="Atualizar dados">
-            <span class="material-icons">refresh</span>
-          </button>
+          <div id="sync-status" class="sync-status" role="status" aria-live="polite" aria-label="Status de sincronização">
+            <span class="sync-dot" aria-hidden="true"></span>
+            <span class="sync-text">Conectando...</span>
+          </div>
           <button id="menu-toggle" aria-label="Menu">
             <span class="material-icons">menu</span>
           </button>
