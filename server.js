@@ -32,9 +32,9 @@ const app = express();
 const APP_VERSION = '2.0.10';
 const SERVER_INSTANCE = randomBytes(4).toString('hex');
 const IS_PROD = process.env.NODE_ENV === 'production';
-const DOMAIN = process.env.DOMAIN || 'start.devlimassh.shop';
-const SSL_KEY_PATH = process.env.SSL_KEY_PATH || '/etc/letsencrypt/live/start.devlimassh.shop/privkey.pem';
-const SSL_CERT_PATH = process.env.SSL_CERT_PATH || '/etc/letsencrypt/live/start.devlimassh.shop/fullchain.pem';
+const DOMAIN = process.env.DOMAIN || 'start.devlima.wtf';
+const SSL_KEY_PATH = process.env.SSL_KEY_PATH || '/etc/letsencrypt/live/start.devlima.wtf/privkey.pem';
+const SSL_CERT_PATH = process.env.SSL_CERT_PATH || '/etc/letsencrypt/live/start.devlima.wtf/fullchain.pem';
 const USE_HTTPS = fsSync.existsSync(SSL_KEY_PATH) && fsSync.existsSync(SSL_CERT_PATH);
 
 let browserInstance = null;
