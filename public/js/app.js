@@ -93,6 +93,24 @@ const SYNC_STATUS_TEXT = {
   syncing: 'Sincronizando...'
 };
 
+const RESOURCE_SYNC_DELAY = 600;
+const scheduledResourceSyncs = new Map();
+
+function scheduleResourceSync(resourceKey, task, delay = RESOURCE_SYNC_DELAY) {
+  if (scheduledResourceSyncs.has(resourceKey)) {
+    clearTimeout(scheduledResourceSyncs.get(resourceKey));
+  }
+
+  const timeoutId = setTimeout(() => {
+    scheduledResourceSyncs.delete(resourceKey);
+    Promise.resolve(task()).catch((error) => {
+      console.error(`Erro ao sincronizar recurso ${resourceKey}`, error);
+    });
+  }, delay);
+
+  scheduledResourceSyncs.set(resourceKey, timeoutId);
+}
+
 function updateSyncStatus(state) {
   if (!syncStatus || !syncStatusText) return;
   syncStatus.dataset.state = state;
@@ -102,6 +120,7 @@ function updateSyncStatus(state) {
 
 let isFullSyncInProgress = false;
 let hasConnectedToEvents = false;
+let eventSourceReconnectTimeout = null;
 
 async function syncAllData({ showToast = false } = {}) {
   if (!navigator.onLine) {
@@ -175,16 +194,26 @@ function connectEventSource() {
 
   eventSource = new EventSource('/api/events');
 
-  eventSource.addEventListener('produtos-updated', () => carregarProdutos(true));
-  eventSource.addEventListener('orcamentos-updated', () => carregarOrcamentos(true));
+  eventSource.addEventListener('produtos-updated', () => {
+    scheduleResourceSync('produtos', () => carregarProdutos(true));
+  });
+  eventSource.addEventListener('orcamentos-updated', () => {
+    scheduleResourceSync('orcamentos', () => carregarOrcamentos(true));
+  });
   eventSource.addEventListener('usuarios-updated', () => {
-    if (usuarioAtual?.admin) carregarUsuarios();
+    if (usuarioAtual?.admin) {
+      scheduleResourceSync('usuarios', () => carregarUsuarios());
+    }
   });
   eventSource.addEventListener('connected', () => {
     updateSyncStatus('connected');
   });
 
   eventSource.onopen = async () => {
+    if (eventSourceReconnectTimeout) {
+      clearTimeout(eventSourceReconnectTimeout);
+      eventSourceReconnectTimeout = null;
+    }
     const reconectando = hasConnectedToEvents;
     hasConnectedToEvents = true;
     updateSyncStatus('connected');
@@ -198,7 +227,12 @@ function connectEventSource() {
     updateSyncStatus(navigator.onLine ? 'reconnecting' : 'offline');
     eventSource.close();
     eventSource = null;
-    setTimeout(connectEventSource, 5000);
+    if (!eventSourceReconnectTimeout) {
+      eventSourceReconnectTimeout = setTimeout(() => {
+        eventSourceReconnectTimeout = null;
+        connectEventSource();
+      }, 5000);
+    }
   };
 }
 
@@ -217,6 +251,13 @@ let currentPage = "home"; // Página atual para controle do histórico
 let usuarioAtual = null; // Dados do usuário logado
 let offlineQueue = [];
 let eventSource = null;
+const resourceFetchPromises = {
+  produtos: null,
+  templates: null,
+  orcamentos: null,
+  usuarios: null,
+  registros: null,
+};
 
 // Elementos DOM frequentemente acessados
 const appContent = document.getElementById("app-content");
@@ -1203,9 +1244,14 @@ async function carregarProdutos(forceReload = false) {
     renderizarProdutos();
     return;
   }
-  
-  // Mostra skeleton loading
-  if (produtosLista) {
+
+  if (resourceFetchPromises.produtos) {
+    await resourceFetchPromises.produtos;
+    renderizarProdutos();
+    return;
+  }
+
+  if (produtosLista && produtosCache.length === 0) {
     produtosLista.innerHTML = Array.from({ length: 3 })
       .map(() => `
         <div class="item-card">
@@ -1218,33 +1264,58 @@ async function carregarProdutos(forceReload = false) {
       `)
       .join("");
   }
-  
+
+  const fetchPromise = (async () => {
+    try {
+      const response = await fetchWithNoCache("/api/produtos");
+      if (!response.ok) throw new Error("Erro ao buscar produtos");
+      produtosCache = await response.json();
+    } catch (error) {
+      console.error("Erro ao carregar produtos:", error);
+      mostrarToast("Erro ao carregar produtos.", "error");
+      produtosCache = [];
+    }
+  })();
+
+  resourceFetchPromises.produtos = fetchPromise;
+
   try {
-    const response = await fetchWithNoCache("/api/produtos");
-    if (!response.ok) throw new Error("Erro ao buscar produtos");
-    produtosCache = await response.json();
-    renderizarProdutos();
-  } catch (error) {
-    console.error("Erro ao carregar produtos:", error);
-    mostrarToast("Erro ao carregar produtos.", "error");
-    produtosCache = []; // Limpa cache em caso de erro
-    renderizarProdutos(); // Renderiza estado vazio
+    await fetchPromise;
+  } finally {
+    resourceFetchPromises.produtos = null;
   }
+
+  renderizarProdutos();
 }
 
 async function carregarTemplates(forceReload = false) {
   if (templatesCache.length > 0 && !forceReload) {
     return;
   }
-  
+
+  if (resourceFetchPromises.templates) {
+    await resourceFetchPromises.templates;
+    return;
+  }
+
+  const fetchPromise = (async () => {
+    try {
+      const response = await fetchWithNoCache("/api/templates");
+      if (!response.ok) throw new Error("Erro ao buscar templates");
+      templatesCache = await response.json();
+    } catch (error) {
+      console.error("Erro ao carregar templates:", error);
+      mostrarToast("Erro ao carregar templates.", "error");
+      templatesCache = [];
+    }
+  })();
+
+  resourceFetchPromises.templates = fetchPromise;
+
   try {
-    const response = await fetchWithNoCache("/api/templates");
-    if (!response.ok) throw new Error("Erro ao buscar templates");
-    templatesCache = await response.json();
-  } catch (error) {
-    console.error("Erro ao carregar templates:", error);
-    mostrarToast("Erro ao carregar templates.", "error");
-    templatesCache = [];
+    await fetchPromise;
+  } finally {
+    resourceFetchPromises.templates = null;
   }
 }
 
@@ -1253,9 +1324,14 @@ async function carregarOrcamentos(forceReload = false) {
     renderizarOrcamentos();
     return;
   }
-  
-  // Mostra skeleton loading
-  if (orcamentosLista) {
+
+  if (resourceFetchPromises.orcamentos) {
+    await resourceFetchPromises.orcamentos;
+    renderizarOrcamentos();
+    return;
+  }
+
+  if (orcamentosLista && orcamentosCache.length === 0) {
     orcamentosLista.innerHTML = Array.from({ length: 3 })
       .map(() => `
         <div class="item-card">
@@ -1267,21 +1343,31 @@ async function carregarOrcamentos(forceReload = false) {
       `)
       .join("");
   }
-  
-  try {
-    const response = await fetchWithNoCache("/api/orcamentos");
-    if (response.ok) {
-      orcamentosCache = await response.json();
-    } else {
-      console.warn('Não foi possível obter orçamentos:', response.status);
+
+  const fetchPromise = (async () => {
+    try {
+      const response = await fetchWithNoCache("/api/orcamentos");
+      if (response.ok) {
+        orcamentosCache = await response.json();
+      } else {
+        console.warn('Não foi possível obter orçamentos:', response.status);
+        orcamentosCache = [];
+      }
+    } catch (error) {
+      console.error('Falha ao carregar orçamentos', error);
       orcamentosCache = [];
     }
-    renderizarOrcamentos();
-  } catch (error) {
-    console.error('Falha ao carregar orçamentos', error);
-    orcamentosCache = [];
-    renderizarOrcamentos();
+  })();
+
+  resourceFetchPromises.orcamentos = fetchPromise;
+
+  try {
+    await fetchPromise;
+  } finally {
+    resourceFetchPromises.orcamentos = null;
   }
+
+  renderizarOrcamentos();
 }
 
 // --- Funções de Renderização --- //
@@ -2042,6 +2128,7 @@ async function processarFilaOffline() {
   const fila = [...offlineQueue];
   offlineQueue = [];
   salvarFilaOffline();
+  const recursosParaAtualizar = new Set();
   for (const acao of fila) {
     try {
       if (acao.tipo === 'addProduto') {
@@ -2055,6 +2142,7 @@ async function processarFilaOffline() {
         }
         const res = await fetch('/api/produtos', { method: 'POST', body: fd });
         if (!res.ok) throw new Error('Falha ao enviar produto');
+        recursosParaAtualizar.add('produtos');
       } else if (acao.tipo === 'addOrcamento') {
         const res = await fetch('/api/orcamentos', {
           method: 'POST',
@@ -2062,6 +2150,10 @@ async function processarFilaOffline() {
           body: JSON.stringify(acao.dados),
         });
         if (!res.ok) throw new Error('Falha ao enviar orçamento');
+        recursosParaAtualizar.add('orcamentos');
+      } else {
+        recursosParaAtualizar.clear();
+        break;
       }
     } catch (err) {
       console.error('Erro ao sincronizar ação offline', err);
@@ -2071,7 +2163,27 @@ async function processarFilaOffline() {
   salvarFilaOffline();
   if (offlineQueue.length === 0) {
     mostrarToast('Sincronização concluída');
-    await syncAllData();
+    if (recursosParaAtualizar.size === 0) {
+      await syncAllData();
+    } else {
+      const atualizacoes = [];
+      if (recursosParaAtualizar.has('produtos')) {
+        atualizacoes.push(carregarProdutos(true));
+      }
+      if (recursosParaAtualizar.has('orcamentos')) {
+        atualizacoes.push(carregarOrcamentos(true));
+      }
+      if (usuarioAtual?.admin && recursosParaAtualizar.has('usuarios')) {
+        atualizacoes.push(carregarUsuarios());
+      }
+      if (usuarioAtual?.admin && recursosParaAtualizar.has('registros')) {
+        atualizacoes.push(carregarRegistros());
+      }
+
+      if (atualizacoes.length > 0) {
+        await Promise.all(atualizacoes);
+      }
+    }
   } else {
     mostrarToast('Algumas ações não foram sincronizadas');
   }
@@ -2102,18 +2214,35 @@ function mostrarConfirmacao(mensagem) {
 
 // --- Usuários (Admin) --- //
 async function carregarUsuarios() {
-  try {
-    const res = await fetch('/api/usuarios');
-    if (res.ok) {
-      usuariosCache = await res.json();
-    } else {
-      console.warn('Não foi possível obter usuários:', res.status);
+  if (resourceFetchPromises.usuarios) {
+    await resourceFetchPromises.usuarios;
+    renderizarUsuarios();
+    return;
+  }
+
+  const fetchPromise = (async () => {
+    try {
+      const res = await fetch('/api/usuarios');
+      if (res.ok) {
+        usuariosCache = await res.json();
+      } else {
+        console.warn('Não foi possível obter usuários:', res.status);
+        usuariosCache = [];
+      }
+    } catch (err) {
+      console.error('Falha ao carregar usuários', err);
       usuariosCache = [];
     }
-  } catch (err) {
-    console.error('Falha ao carregar usuários', err);
-    usuariosCache = [];
+  })();
+
+  resourceFetchPromises.usuarios = fetchPromise;
+
+  try {
+    await fetchPromise;
+  } finally {
+    resourceFetchPromises.usuarios = null;
   }
+
   renderizarUsuarios();
 }
 
@@ -2194,18 +2323,35 @@ document.querySelectorAll('#usuario-modal .modal-close, #usuario-modal .modal-ca
 
 // --- Registros (Admin) --- //
 async function carregarRegistros() {
-  try {
-    const res = await fetch('/api/logs');
-    if (res.ok) {
-      registrosCache = await res.json();
-    } else {
-      console.warn('Não foi possível obter registros:', res.status);
+  if (resourceFetchPromises.registros) {
+    await resourceFetchPromises.registros;
+    renderizarRegistros();
+    return;
+  }
+
+  const fetchPromise = (async () => {
+    try {
+      const res = await fetch('/api/logs');
+      if (res.ok) {
+        registrosCache = await res.json();
+      } else {
+        console.warn('Não foi possível obter registros:', res.status);
+        registrosCache = [];
+      }
+    } catch (err) {
+      console.error('Falha ao carregar registros', err);
       registrosCache = [];
     }
-  } catch (err) {
-    console.error('Falha ao carregar registros', err);
-    registrosCache = [];
+  })();
+
+  resourceFetchPromises.registros = fetchPromise;
+
+  try {
+    await fetchPromise;
+  } finally {
+    resourceFetchPromises.registros = null;
   }
+
   renderizarRegistros();
 }
 
