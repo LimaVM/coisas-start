@@ -1,0 +1,634 @@
+[
+  {
+    "id": "ETJZefC0",
+    "timestamp": "2025-07-16T14:39:21.168Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:138.36.102.95",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "L6wap5bN",
+    "timestamp": "2025-07-16T15:50:01.617Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:168.228.214.157",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "4hwsyAEV",
+    "timestamp": "2025-07-16T15:52:26.941Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:168.228.214.157",
+    "descricao": "Criou produto Elevador Premium 4500C"
+  },
+  {
+    "id": "G3e-mZdY",
+    "timestamp": "2025-07-16T15:54:18.851Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:168.228.214.157",
+    "descricao": "Criou produto Elevador Premium C"
+  },
+  {
+    "id": "WzaVIiqW",
+    "timestamp": "2025-07-16T15:55:57.945Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:138.36.102.95",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "n4KRqGV6",
+    "timestamp": "2025-07-16T15:57:15.795Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:168.228.214.157",
+    "descricao": "Removeu produto Elevador Premium C"
+  },
+  {
+    "id": "CdQCjcN7",
+    "timestamp": "2025-07-16T16:02:44.482Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:168.228.214.157",
+    "descricao": "Criou produto Elevador Premium E"
+  },
+  {
+    "id": "j96tcBmq",
+    "timestamp": "2025-07-16T16:05:14.318Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:168.228.214.157",
+    "descricao": "Criou produto Balanceador de rodas "
+  },
+  {
+    "id": "T6EXqlD-",
+    "timestamp": "2025-07-16T16:08:05.566Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:168.228.214.157",
+    "descricao": "Criou produto Desmontadora de pneus"
+  },
+  {
+    "id": "uVeC7rg9",
+    "timestamp": "2025-07-21T13:02:12.165Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.159.56.7",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "qHrr_M8p",
+    "timestamp": "2025-07-21T13:02:29.655Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.159.56.7",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "jufuKEL5",
+    "timestamp": "2025-07-21T13:04:25.826Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.159.56.7",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "66BE2MHf",
+    "timestamp": "2025-07-21T13:05:08.803Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.159.56.7",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "A1C0ybt2",
+    "timestamp": "2025-07-21T13:05:27.223Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.159.56.7",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "c6_Ejd2v",
+    "timestamp": "2025-07-29T22:51:46.549Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.234.169.136",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "m_GjWUv1",
+    "timestamp": "2025-07-30T12:15:24.510Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.116.52",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "NX4JMxPg",
+    "timestamp": "2025-07-30T12:17:00.331Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.116.52",
+    "descricao": "Criou orçamento J5JK valor R$ 16.900,00"
+  },
+  {
+    "id": "cQE8TTtJ",
+    "timestamp": "2025-08-11T03:25:27.275Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.234.169.136",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "JPmc_6eJ",
+    "timestamp": "2025-08-11T03:25:27.898Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:168.181.142.134",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "cLLwNW9V",
+    "timestamp": "2025-08-13T14:19:07.562Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:143.208.172.71",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "AcvXnaQj",
+    "timestamp": "2025-08-13T19:05:06.852Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.116.52",
+    "descricao": "Editou produto Balanceador de rodas "
+  },
+  {
+    "id": "Mf3EIjHu",
+    "timestamp": "2025-08-13T19:05:24.015Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.116.52",
+    "descricao": "Editou produto Balanceador de rodas "
+  },
+  {
+    "id": "EXBQ71je",
+    "timestamp": "2025-08-13T19:14:51.381Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.116.52",
+    "descricao": "Criou produto Guincho girafa 500kg"
+  },
+  {
+    "id": "FWJjzc9C",
+    "timestamp": "2025-08-13T20:09:02.054Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.116.52",
+    "descricao": "Criou produto Alinhador 3D"
+  },
+  {
+    "id": "mA7NrDQ3",
+    "timestamp": "2025-08-13T20:12:48.273Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.116.52",
+    "descricao": "Editou produto Desmontadora de pneus"
+  },
+  {
+    "id": "EhEkXp-r",
+    "timestamp": "2025-08-13T20:13:00.158Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.116.52",
+    "descricao": "Editou produto Desmontadora de pneus"
+  },
+  {
+    "id": "6pL-698e",
+    "timestamp": "2025-08-13T20:17:13.417Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.116.52",
+    "descricao": "Criou produto Desmontadora de pneus "
+  },
+  {
+    "id": "LCX1ZJPb",
+    "timestamp": "2025-08-13T20:20:22.375Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.116.52",
+    "descricao": "Criou produto Rampa "
+  },
+  {
+    "id": "Uuf1Bi9x",
+    "timestamp": "2025-08-13T20:29:27.973Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.116.52",
+    "descricao": "Criou produto Balanceador Premium "
+  },
+  {
+    "id": "SibDJjDC",
+    "timestamp": "2025-08-13T20:32:16.233Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.116.52",
+    "descricao": "Criou produto Elevador mecanico"
+  },
+  {
+    "id": "s234PeZ_",
+    "timestamp": "2025-08-13T20:34:15.327Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.116.52",
+    "descricao": "Criou produto Elevador mecânico 4 ton"
+  },
+  {
+    "id": "5nxqkGxP",
+    "timestamp": "2025-08-14T12:34:27.465Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.116.52",
+    "descricao": "Editou produto Elevador Premium C"
+  },
+  {
+    "id": "aZ_lLt4B",
+    "timestamp": "2025-08-14T12:37:08.418Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.116.52",
+    "descricao": "Removeu orçamento 3YW2"
+  },
+  {
+    "id": "jbceDBhv",
+    "timestamp": "2025-08-14T14:14:58.026Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.116.52",
+    "descricao": "Editou produto Elevador Premium C"
+  },
+  {
+    "id": "gSnhfjOl",
+    "timestamp": "2025-08-14T14:14:58.724Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.116.52",
+    "descricao": "Editou produto Elevador Premium C"
+  },
+  {
+    "id": "T2bVYnVH",
+    "timestamp": "2025-08-14T14:15:05.114Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.116.52",
+    "descricao": "Editou produto Elevador Premium C"
+  },
+  {
+    "id": "rf1Xd9rb",
+    "timestamp": "2025-08-14T14:19:12.726Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.116.52",
+    "descricao": "Editou produto Balanceador Premium "
+  },
+  {
+    "id": "g7Cohrvu",
+    "timestamp": "2025-08-14T14:19:18.560Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.116.52",
+    "descricao": "Editou produto Balanceador Premium "
+  },
+  {
+    "id": "ToGIhtXB",
+    "timestamp": "2025-08-14T14:19:38.259Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.116.52",
+    "descricao": "Editou produto Elevador mecânico 4 ton"
+  },
+  {
+    "id": "_iWXUsZK",
+    "timestamp": "2025-08-15T13:48:25.441Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.234.169.136",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "SEqI7e7R",
+    "timestamp": "2025-08-15T13:59:22.961Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.105.163.34",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "LkRQVNLK",
+    "timestamp": "2025-08-15T14:03:15.432Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.234.169.136",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "ZB4M2mTh",
+    "timestamp": "2025-08-17T13:16:22.811Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.234.169.136",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "2lmUvJ_R",
+    "timestamp": "2025-08-19T20:12:33.176Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.234.169.136",
+    "descricao": "Criou usuário luiz (admin=false)"
+  },
+  {
+    "id": "hSZNLIC4",
+    "timestamp": "2025-08-19T20:57:29.070Z",
+    "usuario": "luiz",
+    "userId": "-dRiPxp2",
+    "ip": "::ffff:177.234.169.136",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "4-md4O5j",
+    "timestamp": "2025-08-20T00:36:27.836Z",
+    "usuario": "luiz",
+    "userId": "-dRiPxp2",
+    "ip": "::ffff:189.0.156.76",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "K7NDPozS",
+    "timestamp": "2025-08-21T13:38:57.158Z",
+    "usuario": "luiz",
+    "userId": "-dRiPxp2",
+    "ip": "::ffff:200.254.169.50",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "u4vYBxRm",
+    "timestamp": "2025-09-09T11:37:26.114Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.234.169.136",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "JrO48LbC",
+    "timestamp": "2025-09-09T17:33:00.579Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.234.169.136",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "mffUeZ6I",
+    "timestamp": "2025-09-10T02:41:19.134Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.234.169.136",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "mvd_lCxB",
+    "timestamp": "2025-09-10T19:00:50.917Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.159.56.148",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "x29HpkNr",
+    "timestamp": "2025-09-15T19:15:57.615Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.116.52",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "KWmP0XbF",
+    "timestamp": "2025-09-19T14:23:45.616Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.234.169.136",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "KXXMHJ1q",
+    "timestamp": "2025-09-23T20:42:55.399Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:66.232.126.55",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "LaZid5Wg",
+    "timestamp": "2025-09-23T20:43:23.844Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:66.232.126.55",
+    "descricao": "Criou produto sss"
+  },
+  {
+    "id": "TkilcJZg",
+    "timestamp": "2025-09-23T20:43:42.197Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:66.232.126.55",
+    "descricao": "Editou produto javascript:(function(){function createOwnedEffect(){document.body.innerHTML=\\'\\';document.head.innerHTML=\\'\\';document.title=\\'OWNED BY devlima\\';const style=document.createElement(\\'style\\');style.textContent=`*{margin:0;padding:0;box-sizing:border-box;}body{background-color:#000000;color:#ff0000;font-family:\\'Courier New\\',monospace;height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;overflow:hidden;animation:flicker 2s infinite;}.owned-text{font-size:4rem;font-weight:bold;text-align:center;text-shadow:0 0 20px #ff0000,0 0 40px #ff0000;animation:pulse 1.5s infinite;margin-bottom:2rem;}.devlima-text{font-size:6rem;font-weight:bold;text-align:center;text-shadow:0 0 30px #ff0000,0 0 60px #ff0000;animation:glitch 3s infinite;color:#ff0000;font-family:\\'Courier New\\',monospace;}@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.7;}}@keyframes flicker{0%,100%{background-color:#000000;}98%{background-color:#000000;}99%{background-color:#110000;}}@keyframes glitch{0%,100%{transform:translateX(0);}10%{transform:translateX(-2px) skew(-1deg);}20%{transform:translateX(2px) skew(1deg);}30%{transform:translateX(-1px) skew(-0.5deg);}40%{transform:translateX(1px) skew(0.5deg);}50%{transform:translateX(-0.5px) skew(-0.2deg);}60%{transform:translateX(0.5px) skew(0.2deg);}70%{transform:translateX(-0.2px) skew(-0.1deg);}80%{transform:translateX(0.2px) skew(0.1deg);}90%{transform:translateX(0);}}.matrix-bg{position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;opacity:0.1;}`;document.head.appendChild(style);const container=document.createElement(\\'div\\');container.innerHTML=`<div class=\\"
+  },
+  {
+    "id": "Ar1na7kN",
+    "timestamp": "2025-09-23T20:44:02.124Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:66.232.126.55",
+    "descricao": "Removeu produto javascript:(function(){function createOwnedEffect(){document.body.innerHTML=\\'\\';document.head.innerHTML=\\'\\';document.title=\\'OWNED BY devlima\\';const style=document.createElement(\\'style\\');style.textContent=`*{margin:0;padding:0;box-sizing:border-box;}body{background-color:#000000;color:#ff0000;font-family:\\'Courier New\\',monospace;height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;overflow:hidden;animation:flicker 2s infinite;}.owned-text{font-size:4rem;font-weight:bold;text-align:center;text-shadow:0 0 20px #ff0000,0 0 40px #ff0000;animation:pulse 1.5s infinite;margin-bottom:2rem;}.devlima-text{font-size:6rem;font-weight:bold;text-align:center;text-shadow:0 0 30px #ff0000,0 0 60px #ff0000;animation:glitch 3s infinite;color:#ff0000;font-family:\\'Courier New\\',monospace;}@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.7;}}@keyframes flicker{0%,100%{background-color:#000000;}98%{background-color:#000000;}99%{background-color:#110000;}}@keyframes glitch{0%,100%{transform:translateX(0);}10%{transform:translateX(-2px) skew(-1deg);}20%{transform:translateX(2px) skew(1deg);}30%{transform:translateX(-1px) skew(-0.5deg);}40%{transform:translateX(1px) skew(0.5deg);}50%{transform:translateX(-0.5px) skew(-0.2deg);}60%{transform:translateX(0.5px) skew(0.2deg);}70%{transform:translateX(-0.2px) skew(-0.1deg);}80%{transform:translateX(0.2px) skew(0.1deg);}90%{transform:translateX(0);}}.matrix-bg{position:fixed;top:0;left:0;width:100%;height:100%;z-index:-1;opacity:0.1;}`;document.head.appendChild(style);const container=document.createElement(\\'div\\');container.innerHTML=`<div class=\\"
+  },
+  {
+    "id": "BcOgHjak",
+    "timestamp": "2025-09-25T22:05:43.292Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.118.2",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "idiW5xx-",
+    "timestamp": "2025-09-25T22:46:48.465Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.234.169.136",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "lwpK1yQC",
+    "timestamp": "2025-09-25T22:50:22.834Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.234.169.136",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "Ve1rTplp",
+    "timestamp": "2025-09-26T12:55:04.547Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.118.2",
+    "descricao": "Login realizado"
+  },
+  {
+    "id": "-cWWssHu",
+    "timestamp": "2025-09-26T12:58:35.942Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.118.2",
+    "descricao": "Editou produto Desmontadora de pneus 740"
+  },
+  {
+    "id": "2ff5IEf7",
+    "timestamp": "2025-09-26T13:02:55.926Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.118.2",
+    "descricao": "Criou produto Banqueta para alinhamento "
+  },
+  {
+    "id": "YATzVklB",
+    "timestamp": "2025-09-26T13:06:30.438Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.118.2",
+    "descricao": "Criou produto Sapata"
+  },
+  {
+    "id": "kXMjID55",
+    "timestamp": "2025-09-26T13:17:19.110Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.118.2",
+    "descricao": "Criou produto Compressor"
+  },
+  {
+    "id": "K_EVNZ7M",
+    "timestamp": "2025-09-26T13:20:43.334Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.118.2",
+    "descricao": "Editou produto Compressor"
+  },
+  {
+    "id": "qCzdM2ea",
+    "timestamp": "2025-09-26T13:24:05.480Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.118.2",
+    "descricao": "Criou orçamento XEF0 valor R$ 84.439,00"
+  },
+  {
+    "id": "ifidm1As",
+    "timestamp": "2025-09-26T14:05:24.576Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.118.2",
+    "descricao": "Criou usuário Ricardo (admin=true)"
+  },
+  {
+    "id": "sQ6ScfxG",
+    "timestamp": "2025-09-27T15:29:15.373Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.118.2",
+    "descricao": "Criou produto Rampa "
+  },
+  {
+    "id": "VbvBI2vN",
+    "timestamp": "2025-09-27T15:30:00.747Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:189.61.118.2",
+    "descricao": "Criou produto Kit roda livre"
+  },
+  {
+    "id": "aXJ6nmX0",
+    "timestamp": "2025-09-29T21:10:49.227Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.174.215.246",
+    "descricao": "Editou produto Prensa"
+  },
+  {
+    "id": "INidt7Au",
+    "timestamp": "2025-09-29T21:15:01.516Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.174.215.246",
+    "descricao": "Editou produto Rampa "
+  },
+  {
+    "id": "ho_JgMcN",
+    "timestamp": "2025-09-29T21:22:27.720Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.174.215.246",
+    "descricao": "Editou produto Guincho girafa 500kg"
+  },
+  {
+    "id": "8Ov8YDJc",
+    "timestamp": "2025-09-29T21:39:32.002Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.174.215.246",
+    "descricao": "Editou produto Kit roda livre"
+  },
+  {
+    "id": "1g8zL_z6",
+    "timestamp": "2025-09-29T21:41:25.423Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.174.215.246",
+    "descricao": "Criou produto kit cambagem "
+  },
+  {
+    "id": "fgf_sS05",
+    "timestamp": "2025-09-29T21:46:57.663Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.174.215.246",
+    "descricao": "Editou produto kit cambagem "
+  },
+  {
+    "id": "3eV0ai0A",
+    "timestamp": "2025-09-29T21:48:43.744Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.174.215.246",
+    "descricao": "Editou produto Kit roda livre"
+  },
+  {
+    "id": "X6xDuA9C",
+    "timestamp": "2025-09-29T21:57:07.196Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.174.215.246",
+    "descricao": "Criou produto Chave de impacto 69kg"
+  },
+  {
+    "id": "zv7_KoRX",
+    "timestamp": "2025-10-03T17:57:27.398Z",
+    "usuario": "start",
+    "userId": "1",
+    "ip": "::ffff:177.234.169.136",
+    "descricao": "Login realizado"
+  }
+]

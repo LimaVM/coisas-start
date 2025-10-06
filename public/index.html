@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#2563eb">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#111827">
+  <meta name="color-scheme" content="light dark">
+  <meta name="description" content="Aplicativo de orçamentos para produtos">
+  <title>Start Orçamentos - App de Orçamentos</title>
+  
+  <!-- Ícones para PWA -->
+  <link rel="icon" href="/images/icons/favicon.ico" type="image/x-icon">
+  <link rel="apple-touch-icon" href="/images/icons/icon-192x192.png">
+  
+  <!-- Manifest para PWA -->
+  <link rel="manifest" href="/manifest.json">
+  <link rel="preload" href="/css/modern-style.css?v=2.0.10" as="style">
+  <link rel="preload" href="/js/app.js?v=2.0.10" as="script">
+  <link rel="prefetch" href="/js/jspdf.umd.min.js?v=2.0.10" as="script">
+  
+  <!-- Estilos CSS com versionamento anti-cache -->
+  <link rel="stylesheet" href="/css/modern-style.css?v=2.0.10">
+  
+  <!-- Fonte Inter do Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" as="style">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Ícones Material - carregados localmente para funcionar offline -->
+  <link rel="stylesheet" href="/fonts/material-icons.css?v=2.0.10">
+</head>
+<body>
+  <!-- Cabeçalho do aplicativo -->
+  <header class="app-header">
+    <div class="container">
+      <div class="header-content">
+        <div class="header-logo">
+        <picture>
+          <img src="/images/logo/logo.jpeg" alt="Start Orçamentos" loading="lazy">
+        </picture>
+          <h1>Start Orçamentos</h1>
+        </div>
+        <div class="header-actions">
+          <button id="refresh-btn" class="btn-icon" aria-label="Atualizar dados" title="Atualizar dados">
+            <span class="material-icons">refresh</span>
+          </button>
+          <button id="menu-toggle" aria-label="Menu">
+            <span class="material-icons">menu</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Menu de navegação lateral -->
+  <nav id="side-menu" class="side-menu">
+    <div class="menu-header">
+      <div class="menu-header-logo">
+        <picture>
+          <img src="/images/logo/logo.jpeg" alt="Start Orçamentos" loading="lazy">
+        </picture>
+        <h2>Start Orçamentos</h2>
+      </div>
+      <button id="menu-close" aria-label="Fechar menu">
+        <span class="material-icons">close</span>
+      </button>
+    </div>
+    <ul class="menu-items">
+      <li data-page="home" class="active">
+        <a href="#home">
+          <span class="material-icons">home</span>
+          <span>Início</span>
+        </a>
+      </li>
+      <li data-page="produtos">
+        <a href="#produtos">
+          <span class="material-icons">inventory_2</span>
+          <span>Produtos</span>
+        </a>
+      </li>
+      <li data-page="orcamentos">
+        <a href="#orcamentos">
+          <span class="material-icons">description</span>
+          <span>Orçamentos</span>
+        </a>
+      </li>
+      <li data-page="usuarios" class="admin-only" style="display:none;">
+        <a href="#usuarios">
+          <span class="material-icons">people</span>
+          <span>Usuários</span>
+        </a>
+      </li>
+      <li data-page="registros" class="admin-only" style="display:none;">
+        <a href="#registros">
+          <span class="material-icons">receipt_long</span>
+          <span>Registros</span>
+        </a>
+      </li>
+      <li data-page="perfil">
+        <a href="#perfil">
+          <span class="material-icons">account_circle</span>
+          <span>Perfil</span>
+        </a>
+      </li>
+      <li data-page="sobre">
+        <a href="#sobre">
+          <span class="material-icons">info</span>
+          <span>Sobre</span>
+        </a>
+      </li>
+    </ul>
+  </nav>
+
+  <!-- Overlay para quando o menu estiver aberto -->
+  <div id="overlay"></div>
+
+  <!-- Conteúdo principal do aplicativo -->
+  <main id="app-content">
+    <div class="container">
+      <!-- Página inicial -->
+      <section id="home" class="page active">
+        <div class="page-header">
+          <h2 class="home-title">Bem-vindo ao Start Orçamentos</h2>
+        </div>
+        <div class="dashboard">
+          <div class="card animate-fadeInUp" id="card-produtos">
+            <div class="card-icon">
+              <span class="material-icons">inventory_2</span>
+            </div>
+            <div class="card-content">
+              <h3>Produtos</h3>
+              <p>Gerencie produtos</p>
+            </div>
+          </div>
+          <div class="card animate-fadeInUp" id="card-orcamentos" style="animation-delay: 0.1s;">
+            <div class="card-icon">
+              <span class="material-icons">description</span>
+            </div>
+            <div class="card-content">
+              <h3>Orçamentos</h3>
+              <p>Crie orçamentos</p>
+            </div>
+          </div>
+          <div class="card animate-fadeInUp admin-only" id="card-usuarios" style="animation-delay: 0.2s;">
+            <div class="card-icon">
+              <span class="material-icons">people</span>
+            </div>
+            <div class="card-content">
+              <h3>Usuários</h3>
+              <p>Gerencie usuários</p>
+            </div>
+          </div>
+          <div class="card animate-fadeInUp admin-only" id="card-registros" style="animation-delay: 0.3s;">
+            <div class="card-icon">
+              <span class="material-icons">receipt_long</span>
+            </div>
+            <div class="card-content">
+              <h3>Registros</h3>
+              <p>Ver registros</p>
+            </div>
+          </div>
+          <div class="card animate-fadeInUp" id="card-perfil" style="animation-delay: 0.4s;">
+            <div class="card-icon">
+              <span class="material-icons">account_circle</span>
+            </div>
+            <div class="card-content">
+              <h3>Perfil</h3>
+              <p>Editar perfil</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Página de produtos -->
+      <section id="produtos" class="page">
+        <div class="page-header">
+          <h2>Produtos</h2>
+          <button id="add-produto-btn" class="fab" aria-label="Adicionar produto">
+            <span class="material-icons">add</span>
+          </button>
+        </div>
+        <div class="search-bar">
+          <span class="material-icons">search</span>
+          <input type="text" id="produto-search" name="produto-search" placeholder="Buscar produtos..." list="sugestoes-produtos">
+          <datalist id="sugestoes-produtos"></datalist>
+        </div>
+        <div id="produtos-lista" class="lista-items">
+          <!-- Os produtos serão carregados dinamicamente aqui -->
+          <div class="empty-state">
+            <span class="material-icons">inventory_2</span>
+            <h3>Nenhum produto cadastrado</h3>
+            <p>Adicione produtos ao seu catálogo para começar a criar orçamentos.</p>
+            <button id="empty-add-produto-btn" class="btn btn-primary">
+              <span class="material-icons">add</span>
+              Adicionar Produto
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Página de orçamentos -->
+      <section id="orcamentos" class="page">
+        <div class="page-header">
+          <h2>Orçamentos</h2>
+          <button id="add-orcamento-btn" class="fab" aria-label="Adicionar orçamento">
+            <span class="material-icons">add</span>
+          </button>
+        </div>
+        <div class="search-bar">
+          <span class="material-icons">search</span>
+          <input type="text" id="orcamento-search" placeholder="Buscar orçamentos...">
+        </div>
+        <div id="orcamentos-lista" class="lista-items">
+          <!-- Os orçamentos serão carregados dinamicamente aqui -->
+          <div class="empty-state">
+            <span class="material-icons">description</span>
+            <h3>Nenhum orçamento cadastrado</h3>
+            <p>Crie seu primeiro orçamento para começar a gerenciar suas propostas.</p>
+            <button id="empty-add-orcamento-btn" class="btn btn-primary">
+              <span class="material-icons">add</span>
+              Criar Orçamento
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Página de usuários (admin) -->
+      <section id="usuarios" class="page">
+        <div class="page-header">
+          <h2>Usuários</h2>
+          <button id="add-usuario-btn" class="fab" aria-label="Adicionar usuário">
+            <span class="material-icons">add</span>
+          </button>
+        </div>
+        <div id="usuarios-lista" class="lista-items"></div>
+      </section>
+
+      <!-- Página de registros (admin) -->
+      <section id="registros" class="page">
+        <div class="page-header">
+          <h2>Registros</h2>
+        </div>
+        <div id="registros-lista" class="lista-items"></div>
+      </section>
+
+      <!-- Página de perfil -->
+      <section id="perfil" class="page">
+        <div class="page-header">
+          <h2>Meu Perfil</h2>
+        </div>
+        <form id="perfil-form" class="perfil-form">
+          <div class="perfil-avatar">
+            <img id="perfil-foto-preview" src="/images/placeholder.png" alt="Foto de perfil" loading="lazy">
+            <input type="file" id="perfil-foto" accept="image/*" style="display:none;">
+            <button type="button" id="perfil-foto-btn" class="btn btn-secondary">
+              <span class="material-icons">photo_camera</span> Alterar Foto
+            </button>
+          </div>
+          <div class="form-group">
+            <label for="perfil-nome">Nome de usuário</label>
+            <input type="text" id="perfil-nome" required>
+          </div>
+          <div class="form-group">
+            <label for="perfil-senha">Nova senha</label>
+            <input type="password" id="perfil-senha">
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Salvar</button>
+          </div>
+        </form>
+        <div class="form-actions">
+          <button type="button" id="logout-btn" class="btn btn-danger">Sair</button>
+        </div>
+      </section>
+
+      <!-- Página sobre -->
+      <section id="sobre" class="page">
+        <div class="page-header">
+          <h2>Sobre o App</h2>
+        </div>
+        <div class="about-content">
+          <div class="app-logo">
+            <picture>
+              <img src="/images/logo/logo.jpeg" alt="Logo Start Orçamentos" style="max-width: 200px; border-radius: var(--border-radius-lg);" loading="lazy">
+            </picture>
+          </div>
+          <div class="about-info">
+            <h3>Start Orçamentos v1</h3>
+            <p>Aplicação criada exclusivamente para a empresa <strong>Start do Brasil</strong>.</p>
+            <p>Desenvolvimento por <strong>DevLima Soluções</strong> para Start do Brasil.</p>
+          </div>
+          <div class="features-grid">
+            <div class="feature-card">
+              <span class="material-icons">inventory_2</span>
+              <h4>Cadastro de Produtos</h4>
+              <p>Gerencie produtos com nome, valor e foto</p>
+            </div>
+            <div class="feature-card">
+              <span class="material-icons">description</span>
+              <h4>Orçamentos Personalizados</h4>
+              <p>Crie orçamentos com sua identidade visual</p>
+            </div>
+            <div class="feature-card">
+              <span class="material-icons">style</span>
+              <h4>Templates</h4>
+              <p>Escolha entre diferentes modelos de orçamento</p>
+            </div>
+            <div class="feature-card">
+              <span class="material-icons">picture_as_pdf</span>
+              <h4>Exportação PDF</h4>
+              <p>Gere PDFs para download e compartilhamento</p>
+            </div>
+            <div class="feature-card">
+              <span class="material-icons">offline_bolt</span>
+              <h4>Modo Offline</h4>
+              <p>Continue trabalhando mesmo sem internet</p>
+            </div>
+            <div class="feature-card">
+              <span class="material-icons">devices</span>
+              <h4>Responsivo</h4>
+              <p>Funciona em qualquer dispositivo</p>
+            </div>
+          </div>
+          <div class="about-footer">
+            <p>© 2025 Start do Brasil - Todos os direitos reservados</p>
+            <p>www.startdobrasil.com</p>
+          </div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <!-- Navegação inferior para mobile -->
+  <nav class="bottom-nav">
+    <ul class="bottom-nav-items">
+      <li class="bottom-nav-item active" data-page="home">
+        <span class="material-icons">home</span>
+        <span>Início</span>
+      </li>
+      <li class="bottom-nav-item" data-page="produtos">
+        <span class="material-icons">inventory_2</span>
+        <span>Produtos</span>
+      </li>
+      <li class="bottom-nav-item" data-page="orcamentos">
+        <span class="material-icons">description</span>
+        <span>Orçamentos</span>
+      </li>
+      <li class="bottom-nav-item admin-only" data-page="usuarios" style="display:none;">
+        <span class="material-icons">people</span>
+        <span>Usuários</span>
+      </li>
+      <li class="bottom-nav-item admin-only" data-page="registros" style="display:none;">
+        <span class="material-icons">receipt_long</span>
+        <span>Registros</span>
+      </li>
+      <li class="bottom-nav-item" data-page="perfil">
+        <span class="material-icons">account_circle</span>
+        <span>Perfil</span>
+      </li>
+      <li class="bottom-nav-item" data-page="sobre">
+        <span class="material-icons">info</span>
+        <span>Sobre</span>
+      </li>
+    </ul>
+  </nav>
+
+  <!-- Modal para adicionar/editar produto -->
+  <div id="produto-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="produto-modal-title">Novo Produto</h3>
+        <button class="modal-close" aria-label="Fechar">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="produto-form">
+          <input type="hidden" id="produto-id" name="produto-id">
+          <div class="form-group">
+            <label for="produto-nome">Nome do Produto*</label>
+            <input type="text" id="produto-nome" name="produto-nome" required>
+            <span class="helper-text">Digite o nome completo do produto</span>
+          </div>
+          <!-- Campo de Descrição Adicionado -->
+          <div class="form-group">
+            <label for="produto-descricao">Descrição</label>
+            <textarea id="produto-descricao" name="produto-descricao" rows="3"></textarea>
+            <span class="helper-text">Digite uma descrição opcional para o produto</span>
+          </div>
+          <div class="form-group">
+            <label for="produto-valor">Valor (R$)*</label>
+            <input type="number" id="produto-valor" name="produto-valor" step="0.01" min="0" required>
+            <span class="helper-text">Digite o valor unitário do produto</span>
+          </div>
+          <div class="form-group">
+            <label for="produto-foto">Foto do Produto</label>
+            <div class="file-input-container">
+              <input type="file" id="produto-foto" name="produto-foto" accept="image/*">
+              <!-- Container para o Preview Adicionado -->
+              <div id="foto-preview-container" class="file-preview" style="display: none;">
+                <img id="foto-preview" src="#" alt="Preview" loading="lazy">
+              </div>
+              <button type="button" id="select-foto-btn" class="btn btn-secondary">
+                <span class="material-icons">photo_camera</span>
+                Selecionar Imagem
+              </button>
+            </div>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary modal-cancel">Cancelar</button>
+            <button type="submit" class="btn btn-primary">
+              <span class="material-icons">save</span>
+              Salvar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para criar orçamento -->
+  <div id="orcamento-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Novo Orçamento</h3>
+        <button class="modal-close" aria-label="Fechar">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="orcamento-form">
+          <input type="hidden" id="orcamento-id">
+          <div class="form-tabs">
+            <button type="button" class="tab-btn active" data-tab="cliente">Cliente</button>
+            <button type="button" class="tab-btn" data-tab="produtos">Produtos</button>
+            <button type="button" class="tab-btn" data-tab="pagamento">Pagamento</button>
+            <button type="button" class="tab-btn" data-tab="desconto">Desconto</button>
+            <button type="button" class="tab-btn" data-tab="template">Template</button>
+          </div>
+          
+          <!-- Tab Cliente -->
+          <div class="tab-content" id="tab-cliente">
+            <div class="form-group">
+              <label for="cliente-nome">Nome do Cliente*</label>
+              <input type="text" id="cliente-nome" name="cliente-nome" required>
+              <span class="helper-text">Digite o nome completo do cliente</span>
+            </div>
+            <div class="form-group">
+              <label for="cliente-cep">CEP</label>
+              <input type="text" id="cliente-cep" name="cliente-cep">
+              <span class="helper-text">Digite o CEP do cliente</span>
+            </div>
+            <div class="form-group">
+              <label for="cliente-endereco">Endereço</label>
+              <input type="text" id="cliente-endereco" name="cliente-endereco">
+              <span class="helper-text">Digite o endereço completo do cliente</span>
+            </div>
+            <div class="form-group">
+              <label for="cliente-telefone">Telefone</label>
+              <input type="tel" id="cliente-telefone" name="cliente-telefone">
+              <span class="helper-text">Digite o telefone do cliente</span>
+            </div>
+            <div class="form-group">
+              <label for="cliente-cpf">CPF/CNPJ</label>
+              <input type="text" id="cliente-cpf" name="cliente-cpf">
+              <span class="helper-text">Digite o CPF ou CNPJ do cliente</span>
+            </div>
+            <div class="form-group">
+              <label for="cliente-email">E-mail</label>
+              <input type="email" id="cliente-email" name="cliente-email">
+              <span class="helper-text">Digite o e-mail do cliente</span>
+            </div>
+          </div>
+          
+          <!-- Tab Produtos -->
+          <div class="tab-content" id="tab-produtos" style="display: none;">
+            <div class="form-group">
+              <label>Produtos Selecionados</label>
+              <div id="produtos-selecionados" class="selected-items">
+                <!-- Produtos selecionados serão exibidos aqui -->
+                <div class="empty-state">
+                  <p>Nenhum produto selecionado</p>
+                </div>
+              </div>
+              <button type="button" id="add-produtos-btn" class="btn btn-secondary">
+                <span class="material-icons">add</span> Adicionar Produtos
+              </button>
+            </div>
+            <div class="form-group">
+              <label for="orcamento-observacoes">Observações</label>
+              <textarea id="orcamento-observacoes" rows="3"></textarea>
+              <span class="helper-text">Adicione observações ou condições especiais para este orçamento</span>
+            </div>
+          </div>
+
+          <!-- Tab Pagamento -->
+          <div class="tab-content" id="tab-pagamento" style="display: none;">
+            <div class="form-group">
+              <label for="forma-pagamento">Forma de Pagamento</label>
+              <select id="forma-pagamento" name="forma-pagamento">
+                <option value="avista" selected>À vista</option>
+                <option value="prazo">A prazo</option>
+              </select>
+            </div>
+            <div class="form-group" id="avista-grupo">
+              <label for="avista-tipo">Tipo</label>
+              <select id="avista-tipo">
+                <option value="dinheiro">Dinheiro</option>
+                <option value="cartao">Cartão</option>
+              </select>
+            </div>
+            <div id="prazo-grupo" style="display: none;">
+              <div class="form-group">
+                <label for="prazo-parcelas">Parcelas</label>
+                <input type="number" id="prazo-parcelas" min="1" value="1">
+              </div>
+              <div class="form-group">
+                <label for="prazo-juros">Juros ao mês (%)</label>
+                <input type="number" id="prazo-juros" min="0" step="0.01" value="0">
+              </div>
+            </div>
+          </div>
+
+          <!-- Tab Desconto -->
+          <div class="tab-content" id="tab-desconto" style="display: none;">
+            <div class="form-group">
+              <label for="tipo-desconto">Tipo de Desconto</label>
+              <select id="tipo-desconto" name="tipo-desconto">
+                <option value="nenhum" selected>Nenhum</option>
+                <option value="percentual">Percentual (%)</option>
+                <option value="fixo">Valor Fixo (R$)</option>
+              </select>
+              <span class="helper-text">Escolha o tipo de desconto a ser aplicado</span>
+            </div>
+            <div class="form-group" id="valor-desconto-group" style="display: none;">
+              <label for="valor-desconto">Valor do Desconto</label>
+              <input type="number" id="valor-desconto" name="valor-desconto" step="0.01" min="0">
+              <span class="helper-text" id="valor-desconto-helper">Digite o valor do desconto</span>
+            </div>
+          </div>
+          
+          <!-- Tab Template -->
+          <div class="tab-content" id="tab-template" style="display: none;">
+            <div class="form-group">
+              <label>Selecione um Template</label>
+              <div id="templates-lista" class="template-items">
+                <!-- Templates serão carregados aqui -->
+                <div class="empty-state">
+                  <span class="material-icons">hourglass_empty</span>
+                  <p>Carregando templates...</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Ações do Formulário -->
+          <div class="form-actions">
+            <button type="button" id="prev-tab" class="btn btn-secondary" disabled>
+              <span class="material-icons">arrow_back</span> Anterior
+            </button>
+            <button type="button" id="next-tab" class="btn btn-primary">
+              Próximo <span class="material-icons">arrow_forward</span>
+            </button>
+            <!-- ID Adicionado ao botão de submit -->
+            <button type="submit" id="submit-orcamento" class="btn btn-primary" style="display: none;">
+              <span class="material-icons">save</span> Salvar Orçamento
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de Login -->
+  <div id="login-modal" class="modal active">
+    <div class="modal-content" style="max-width:400px;">
+      <div class="modal-header">
+        <h3>Login</h3>
+      </div>
+      <div class="modal-body">
+        <form id="login-form" class="login-form">
+          <div class="form-group">
+            <label for="login-usuario">Usuário</label>
+            <input type="text" id="login-usuario" required>
+          </div>
+          <div class="form-group">
+            <label for="login-senha">Senha</label>
+            <input type="password" id="login-senha" required>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Entrar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para adicionar usuário (admin) -->
+  <div id="usuario-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="usuario-modal-title">Novo Usuário</h3>
+        <button class="modal-close" aria-label="Fechar">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <form id="usuario-form">
+          <input type="hidden" id="usuario-id">
+          <div class="form-group">
+            <label for="usuario-nome">Usuário</label>
+            <input type="text" id="usuario-nome" required>
+          </div>
+          <div class="form-group">
+            <label for="usuario-senha">Senha</label>
+            <input type="password" id="usuario-senha" required>
+          </div>
+          <div class="form-group">
+            <label for="usuario-foto">Foto de perfil</label>
+            <input type="file" id="usuario-foto" accept="image/*">
+          </div>
+          <div class="form-group checkbox-group">
+            <label><input type="checkbox" id="usuario-admin"> Administrador</label>
+          </div>
+          <div class="form-actions">
+            <button type="button" class="btn btn-secondary modal-cancel">Cancelar</button>
+            <button type="submit" class="btn btn-primary">
+              <span class="material-icons">save</span> Salvar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para selecionar produtos para o orçamento (HTML Adicionado) -->
+  <div id="selecionar-produtos-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Selecionar Produtos</h3>
+        <button class="modal-close" aria-label="Fechar">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="search-bar">
+          <span class="material-icons">search</span>
+          <input type="text" id="selecionar-produtos-search" placeholder="Buscar produtos...">
+        </div>
+        <div id="selecionar-produtos-lista" class="lista-items selectable">
+          <!-- Produtos serão carregados aqui -->
+          <div class="empty-state">
+            <span class="material-icons">hourglass_empty</span>
+            <p>Carregando produtos...</p>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary modal-cancel">Cancelar</button>
+          <button type="button" id="confirmar-produtos" class="btn btn-primary">
+            <span class="material-icons">check</span> Confirmar
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal para visualizar orçamento -->
+  <div id="visualizar-orcamento-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Visualizar Orçamento</h3>
+        <button class="modal-close" aria-label="Fechar">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div id="orcamento-preview" class="orcamento-preview">
+          <!-- O orçamento será exibido aqui -->
+          <div class="loading">
+            <div class="spinner"></div>
+            <p>Gerando orçamento...</p>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="button" id="baixar-pdf-orcamento" class="btn btn-secondary">
+            <span class="material-icons">download</span> Baixar PDF
+          </button>
+          <button type="button" id="compartilhar-orcamento" class="btn btn-secondary">
+            <span class="material-icons">share</span> Compartilhar
+          </button>
+          <button type="button" id="imprimir-orcamento" class="btn btn-primary">
+            <span class="material-icons">print</span> Imprimir
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast para notificações (HTML Adicionado) -->
+  <div id="toast" class="toast">
+    <span class="material-icons">info</span>
+    <span id="toast-message"></span>
+  </div>
+
+  <!-- Spinner de carregamento (HTML Adicionado) -->
+  <div id="loading-spinner" class="loading-overlay">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Barra de progresso para geração de PDF -->
+  <div id="pdf-progress-overlay" class="progress-overlay">
+    <div id="pdf-progress-bar" class="progress-bar"></div>
+  </div>
+
+  <!-- Modal de confirmação genérico -->
+  <div id="confirm-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Confirmar</h3>
+      </div>
+      <div class="modal-body">
+        <p id="confirm-message"></p>
+      </div>
+      <div class="form-actions">
+        <button type="button" id="confirm-cancel" class="btn btn-secondary modal-cancel">Cancelar</button>
+        <button type="button" id="confirm-ok" class="btn btn-danger">Sim</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts com versionamento anti-cache -->
+  <script src="/js/jspdf.umd.min.js?v=2.0.10" defer></script>
+  <script src="/js/app.js?v=2.0.10" defer></script>
+  <script>
+    // Registra o service worker para PWA com estratégia de atualização
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        fetch('/api/version')
+          .then(r => r.json())
+          .then(({ version, instance }) => {
+            const compare = (a, b) => {
+              if (!b) return 1;
+              const pa = a.split('.').map(Number);
+              const pb = b.split('.').map(Number);
+              for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+                const diff = (pa[i] || 0) - (pb[i] || 0);
+                if (diff !== 0) return diff > 0 ? 1 : -1;
+              }
+              return 0;
+            };
+            const storedVersion = localStorage.getItem('appVersion');
+            const storedInstance = localStorage.getItem('serverInstance');
+            const shouldPrompt = storedVersion && compare(version, storedVersion) > 0;
+
+            if (storedInstance && storedInstance !== instance) {
+              Promise.all([
+                fetch('/api/logout', { method: 'POST' }).catch(() => {}),
+                'caches' in window ? caches.keys().then(n => Promise.all(n.map(k => caches.delete(k)))) : Promise.resolve()
+              ]).finally(() => {
+                localStorage.setItem('serverInstance', instance);
+                localStorage.setItem('appVersion', version);
+                window.location.reload(true);
+              });
+              return;
+            }
+
+            localStorage.setItem('serverInstance', instance);
+            return navigator.serviceWorker.register(`/service-worker.js?v=${version}&i=${instance}`)
+              .then(registration => {
+                console.log('Service Worker registrado com sucesso:', registration);
+
+                function promptUpdate(worker) {
+                  if (confirm('Nova versão disponível! Deseja atualizar agora?')) {
+                    fetch('/api/logout', { method: 'POST' })
+                      .finally(() => {
+                        const finish = () => {
+                          worker.postMessage({ type: 'SKIP_WAITING' });
+                          localStorage.setItem('appVersion', version);
+                          window.location.reload(true);
+                        };
+                        if ('caches' in window) {
+                          caches.keys()
+                            .then(names => Promise.all(names.map(n => caches.delete(n))))
+                            .finally(finish);
+                        } else {
+                          finish();
+                        }
+                      });
+                  }
+                }
+
+                if (shouldPrompt) {
+                  if (registration.waiting) {
+                    promptUpdate(registration.waiting);
+                  } else {
+                    registration.addEventListener('updatefound', () => {
+                      const newWorker = registration.installing;
+                      newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                          promptUpdate(newWorker);
+                        }
+                      });
+                    });
+                  }
+                } else if (!storedVersion) {
+                  localStorage.setItem('appVersion', version);
+                }
+
+                navigator.serviceWorker.addEventListener('message', event => {
+                  if (event.data && event.data.type === 'SW_UPDATED') {
+                    localStorage.setItem('appVersion', event.data.version);
+                    console.log('Service Worker atualizado para versão:', event.data.version);
+                  }
+                });
+              });
+          })
+          .catch(error => {
+            console.log('Falha ao registrar o Service Worker:', error);
+          });
+      });
+    }
+    
+    // Função para limpar cache manualmente
+    window.clearAppCache = function() {
+      if ('serviceWorker' in navigator && 'caches' in window) {
+        caches.keys().then(cacheNames => {
+          return Promise.all(
+            cacheNames.map(cacheName => caches.delete(cacheName))
+          );
+        }).then(() => {
+          console.log('Cache limpo com sucesso');
+          window.location.reload(true);
+        });
+      }
+    };
+    
+    // Força reload sem cache em desenvolvimento
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      window.addEventListener('beforeunload', () => {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(registrations => {
+            registrations.forEach(registration => registration.unregister());
+          });
+        }
+      });
+    }
+  </script>
+</body>
+</html>
+
