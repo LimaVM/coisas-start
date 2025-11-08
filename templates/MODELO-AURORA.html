@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Proposta <%= orcamento.id %> • <%= vendedor %></title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Poppins', 'Segoe UI', Arial, sans-serif;
+      margin: 0;
+      background: #f4f6fb;
+      color: #1f2937;
+      padding: 40px 24px;
+    }
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.12);
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 36px 40px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      color: #f9fafb;
+    }
+    header .branding {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    header .branding h1 {
+      margin: 0;
+      font-size: 28px;
+      letter-spacing: 0.8px;
+    }
+    header .branding p {
+      margin: 0;
+      font-size: 14px;
+      opacity: 0.9;
+    }
+    header .logo {
+      min-width: 90px;
+      min-height: 90px;
+      border-radius: 22px;
+      background: rgba(255, 255, 255, 0.16);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px;
+    }
+    header .logo img {
+      max-height: 80px;
+      max-width: 160px;
+      object-fit: contain;
+    }
+    main {
+      padding: 32px 40px 48px;
+      display: grid;
+      gap: 32px;
+    }
+    .cards {
+      display: grid;
+      gap: 20px;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    }
+    .card {
+      background: linear-gradient(180deg, rgba(79, 70, 229, 0.08), rgba(79, 70, 229, 0.02));
+      padding: 20px 22px;
+      border-radius: 20px;
+      border: 1px solid rgba(99, 102, 241, 0.18);
+    }
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      text-transform: uppercase;
+      letter-spacing: 1.4px;
+      color: #4f46e5;
+    }
+    .card p {
+      margin: 4px 0;
+      font-size: 14px;
+      color: #374151;
+      line-height: 1.5;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow: hidden;
+      border-radius: 22px;
+      box-shadow: 0 20px 40px rgba(99, 102, 241, 0.12);
+    }
+    table thead {
+      background: #eef2ff;
+      color: #4338ca;
+    }
+    th {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1.6px;
+      padding: 14px;
+      text-align: left;
+    }
+    th.valor {
+      text-align: right;
+    }
+    th.qtd {
+      text-align: center;
+    }
+    td {
+      background: #ffffff;
+      padding: 18px 14px;
+      font-size: 14px;
+      vertical-align: middle;
+      color: #1f2937;
+    }
+    tr:nth-child(even) td {
+      background: #f8fafc;
+    }
+    td.imagem {
+      width: 90px;
+      text-align: center;
+    }
+    td.imagem .thumb {
+      width: 72px;
+      height: 72px;
+      border-radius: 18px;
+      overflow: hidden;
+      margin: 0 auto;
+      background: rgba(79, 70, 229, 0.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.22);
+    }
+    td.imagem .thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    td.valor {
+      text-align: right;
+      font-feature-settings: 'tnum';
+      font-weight: 600;
+    }
+    td.qtd {
+      text-align: center;
+      font-weight: 600;
+    }
+    .totais {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 20px;
+    }
+    .totais .painel {
+      padding: 22px;
+      border-radius: 22px;
+      background: #111827;
+      color: #f9fafb;
+      box-shadow: inset 0 0 0 1px rgba(249, 250, 251, 0.08);
+    }
+    .totais .painel h3 {
+      margin: 0 0 14px;
+      font-size: 15px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      opacity: 0.7;
+    }
+    .totais .painel p {
+      margin: 6px 0;
+      font-size: 15px;
+      line-height: 1.5;
+    }
+    .totais .painel .total {
+      font-size: 22px;
+      font-weight: 700;
+      margin-top: 10px;
+      color: #a78bfa;
+    }
+    .observacoes {
+      background: #fef3c7;
+      border-radius: 20px;
+      padding: 20px 24px;
+      border: 1px solid #f59e0b;
+      color: #92400e;
+    }
+    .observacoes h3 {
+      margin: 0 0 10px;
+      font-size: 15px;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+    .assinaturas {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 40px;
+      margin-top: 36px;
+    }
+    .assinatura {
+      text-align: center;
+      color: #6b7280;
+      font-size: 13px;
+    }
+    .assinatura .linha {
+      margin: 0 auto 8px;
+      width: 220px;
+      border-bottom: 1px solid rgba(107, 114, 128, 0.5);
+      padding-top: 28px;
+    }
+    footer {
+      padding: 24px 40px;
+      font-size: 12px;
+      color: #94a3b8;
+      text-align: center;
+      background: #0f172a;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="branding">
+        <h1><%= vendedor %></h1>
+        <p>Proposta nº <strong><%= orcamento.id %></strong> — Emitida em <%= orcamento.dataCriacaoFormatada %></p>
+        <p>Validade até <%= orcamento.validadeFormatada %></p>
+      </div>
+      <div class="logo">
+        <% if (logoUrl) { %>
+          <img src="<%= logoUrl %>" alt="Logo da empresa">
+        <% } else { %>
+          <span>Start Orçamentos</span>
+        <% } %>
+      </div>
+    </header>
+
+    <main>
+      <section class="cards">
+        <div class="card">
+          <h2>Cliente</h2>
+          <p><strong><%= orcamento.nomeCliente %></strong></p>
+          <% if (orcamento.enderecoCliente) { %>
+            <p><%= orcamento.enderecoCliente %></p>
+          <% } %>
+          <% if (orcamento.telefoneCliente || orcamento.emailCliente) { %>
+            <p>
+              <% if (orcamento.telefoneCliente) { %>
+                Tel: <%= orcamento.telefoneCliente %>
+              <% } %>
+              <% if (orcamento.telefoneCliente && orcamento.emailCliente) { %>
+                <br>
+              <% } %>
+              <% if (orcamento.emailCliente) { %>
+                E-mail: <%= orcamento.emailCliente %>
+              <% } %>
+            </p>
+          <% } %>
+          <% if (orcamento.cpfCliente) { %>
+            <p>Documento: <%= orcamento.cpfCliente %></p>
+          <% } %>
+        </div>
+        <div class="card">
+          <h2>Responsável</h2>
+          <p><strong><%= vendedor %></strong></p>
+          <p>Contato direto para alinhamento e dúvidas.</p>
+          <p>Prazo estimado para implantação: até 3 dias úteis após confirmação.</p>
+        </div>
+        <div class="card">
+          <h2>Condições</h2>
+          <p>Forma de pagamento: <%= orcamento.formaPagamento === 'avista' ? 'À vista' : 'Parcelado' %></p>
+          <% if (orcamento.formaPagamento === 'prazo') { %>
+            <p>Parcelamento: <%= orcamento.parcelas %>x de <%= orcamento.valorParcelaFormatada %></p>
+          <% } else { %>
+            <p>Modalidade: <%= orcamento.avistaTipo === 'cartao' ? 'Cartão' : 'Dinheiro' %></p>
+          <% } %>
+          <% if (orcamento.descontoCalculado > 0) { %>
+            <p>Desconto aplicado: <%= orcamento.valorDescontoCalculadoFormatado %></p>
+          <% } %>
+        </div>
+      </section>
+
+      <section>
+        <table>
+          <thead>
+            <tr>
+              <th>Imagem</th>
+              <th>Produto</th>
+              <th>Descrição</th>
+              <th class="qtd">Qtd</th>
+              <th class="valor">Valor Unit.</th>
+              <th class="valor">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% orcamento.itens.forEach((item) => { %>
+              <tr>
+                <td class="imagem">
+                  <div class="thumb">
+                    <img src="<%= item.imagemUrl || logoUrl %>" alt="Imagem de <%= item.nome %>">
+                  </div>
+                </td>
+                <td><strong><%= item.nome %></strong></td>
+                <td><%= item.descricao || '—' %></td>
+                <td class="qtd"><%= item.quantidade %></td>
+                <td class="valor"><%= item.valorUnitarioOriginalFormatado %></td>
+                <td class="valor"><%= item.valorTotalItemFormatado %></td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="totais">
+        <div class="painel">
+          <h3>Resumo financeiro</h3>
+          <p>Subtotal: <%= orcamento.valorTotalBrutoFormatado %></p>
+          <% if (orcamento.valorTotalComJuros && orcamento.valorTotalComJuros !== orcamento.valorTotal) { %>
+            <p>Total com encargos: <%= orcamento.valorTotalComJurosFormatado %></p>
+          <% } %>
+          <p class="total">Total final: <%= orcamento.valorTotalFormatado %></p>
+        </div>
+        <div class="painel">
+          <h3>Notas importantes</h3>
+          <p>Garantia padrão entre 6 e 12 meses conforme o produto.</p>
+          <p>Instalação e frete mediante análise específica do projeto.</p>
+          <p>Proposta válida até <%= orcamento.validadeFormatada %>.</p>
+        </div>
+      </section>
+
+      <% if (orcamento.observacoes) { %>
+        <section class="observacoes">
+          <h3>Observações adicionais</h3>
+          <p><%= orcamento.observacoes %></p>
+        </section>
+      <% } %>
+
+      <section class="assinaturas">
+        <div class="assinatura">
+          <div class="linha"></div>
+          <p><strong><%= vendedor %></strong></p>
+          <p>Responsável comercial</p>
+        </div>
+        <div class="assinatura">
+          <div class="linha"></div>
+          <p><strong><%= orcamento.nomeCliente %></strong></p>
+          <p>Cliente</p>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      Documento emitido automaticamente pelo Start Orçamentos — Referência <%= orcamento.id %>
+    </footer>
+  </div>
+</body>
+</html>

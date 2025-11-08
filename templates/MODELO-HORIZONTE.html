@@ -80,6 +80,24 @@
       background: linear-gradient(145deg, #ffffff, #f8fafc);
       box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
     }
+    .item-card .thumb {
+      width: 80px;
+      height: 80px;
+      border-radius: 18px;
+      overflow: hidden;
+      margin-bottom: 14px;
+      background: #e2e8f0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.35);
+    }
+    .item-card .thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
     .item-card h3 {
       margin: 0 0 8px;
       font-size: 17px;
@@ -206,6 +224,9 @@
         <div class="grid-itens">
           <% orcamento.itens.forEach((item) => { %>
             <div class="item-card">
+              <div class="thumb">
+                <img src="<%= item.imagemUrl || logoUrl %>" alt="Imagem de <%= item.nome %>">
+              </div>
               <h3><%= item.nome %></h3>
               <p><%= item.descricao || '—' %></p>
               <div class="linha"></div>

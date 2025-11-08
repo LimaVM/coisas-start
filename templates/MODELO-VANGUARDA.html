@@ -88,6 +88,9 @@
       overflow: hidden;
       box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
     }
+    col.imagem {
+      width: 90px;
+    }
     thead {
       background: var(--surface);
     }
@@ -104,6 +107,27 @@
       vertical-align: top;
       font-size: 14px;
       color: var(--text-dark);
+    }
+    td.imagem {
+      text-align: center;
+    }
+    td.imagem .thumb {
+      width: 70px;
+      height: 70px;
+      border-radius: 18px;
+      overflow: hidden;
+      margin: 0 auto;
+      background: rgba(148, 163, 184, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.35);
+    }
+    td.imagem .thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
     }
     tbody tr:nth-child(even) {
       background: #f1f5f9;
@@ -225,8 +249,17 @@
     </div>
 
     <table>
+      <colgroup>
+        <col class="imagem">
+        <col>
+        <col>
+        <col>
+        <col>
+        <col>
+      </colgroup>
       <thead>
         <tr>
+          <th>Imagem</th>
           <th>Produto</th>
           <th>Descrição</th>
           <th class="qtd">Qtd</th>
@@ -237,6 +270,11 @@
       <tbody>
         <% orcamento.itens.forEach((item) => { %>
           <tr>
+            <td class="imagem">
+              <div class="thumb">
+                <img src="<%= item.imagemUrl || logoUrl %>" alt="Imagem de <%= item.nome %>">
+              </div>
+            </td>
             <td><strong><%= item.nome %></strong></td>
             <td><%= item.descricao || '—' %></td>
             <td class="qtd"><%= item.quantidade %></td>
