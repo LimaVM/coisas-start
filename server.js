@@ -149,6 +149,7 @@ const DATA_FILES = [
   path.join(__dirname, 'data', 'usuarios.json'),
   path.join(__dirname, 'data', 'logs.json'),
 ];
+const TEMPLATES_DIR = path.join(__dirname, 'templates');
 
 const dataFileHashes = new Map();
 
@@ -172,6 +173,37 @@ async function emitDataFileChange(filePath) {
   broadcast('data-files-changed', { file: path.basename(filePath) });
 }
 
+async function computeTemplateDirSignature() {
+  try {
+    const entries = await fs.readdir(TEMPLATES_DIR, { withFileTypes: true });
+    const templates = await Promise.all(
+      entries
+        .filter((entry) => entry.isFile() && entry.name.endsWith('.html'))
+        .map(async (entry) => {
+          const fullPath = path.join(TEMPLATES_DIR, entry.name);
+          const stats = await fs.stat(fullPath);
+          return `${entry.name}:${stats.size}:${stats.mtimeMs}`;
+        })
+    );
+    const signature = templates.sort().join('|');
+    return createHash('sha1').update(signature).digest('hex');
+  } catch (err) {
+    console.error('Erro ao calcular assinatura dos templates:', err);
+    return null;
+  }
+}
+
+async function emitTemplateDirChange() {
+  const newHash = await computeTemplateDirSignature();
+  const previousHash = dataFileHashes.get(TEMPLATES_DIR);
+  if (!newHash || newHash === previousHash) {
+    return;
+  }
+  dataFileHashes.set(TEMPLATES_DIR, newHash);
+  broadcast('templates-updated');
+  broadcast('data-files-changed', { file: 'templates' });
+}
+
 async function initializeDataWatchers() {
   await Promise.all(
     DATA_FILES.map(async (filePath) => {
@@ -189,6 +221,28 @@ async function initializeDataWatchers() {
       });
     })
   );
+
+  if (fsSync.existsSync(TEMPLATES_DIR)) {
+    const templateHash = await computeTemplateDirSignature();
+    if (templateHash) {
+      dataFileHashes.set(TEMPLATES_DIR, templateHash);
+    }
+
+    let templateWatchTimeout = null;
+    fsSync.watch(TEMPLATES_DIR, (eventType, filename) => {
+      if (filename && !filename.endsWith('.html')) {
+        return;
+      }
+      if (templateWatchTimeout) {
+        clearTimeout(templateWatchTimeout);
+      }
+      templateWatchTimeout = setTimeout(() => {
+        emitTemplateDirChange().catch((err) => {
+          console.error('Erro ao monitorar alterações em templates:', err);
+        });
+      }, 150);
+    });
+  }
 }
 
 app.get('/api/events', authRequired, (req, res) => {
@@ -363,6 +417,11 @@ async function lerArquivoJSON(filePath) {
 async function escreverArquivoJSON(filePath, data) {
   try {
     await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf8");
+    try {
+      await emitDataFileChange(filePath);
+    } catch (notifyError) {
+      console.error(`Erro ao notificar alteração do arquivo ${filePath}:`, notifyError);
+    }
     return true;
   } catch (error) {
     console.error(`Erro ao escrever arquivo ${filePath}:`, error);

@@ -225,6 +225,12 @@ function connectEventSource() {
   eventSource.addEventListener('orcamentos-updated', () => {
     scheduleResourceSync('orcamentos', () => carregarOrcamentos(true));
   });
+  eventSource.addEventListener('templates-updated', () => {
+    scheduleResourceSync('templates', async () => {
+      await carregarTemplates(true);
+      renderizarTemplates(templateSelecionadoId);
+    });
+  });
   eventSource.addEventListener('usuarios-updated', (event) => {
     const payload = parseEventPayload(event);
     if (usuarioAtual?.admin) {
