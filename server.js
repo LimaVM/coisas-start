@@ -23,7 +23,7 @@ const xssClean = require("xss-clean");
 const sanitizeHtml = require("sanitize-html");
 const UAParser = require("ua-parser-js");
 const bcrypt = require("bcrypt");
-const { randomBytes } = require("crypto");
+const { randomBytes, createHash } = require("crypto");
 const rateLimit = require("express-rate-limit");
 const hpp = require("hpp");
 const fsSync = require("fs");
@@ -143,6 +143,54 @@ function broadcast(event, data = {}) {
   sseClients.forEach(res => res.write(payload));
 }
 
+const DATA_FILES = [
+  path.join(__dirname, 'data', 'produtos.json'),
+  path.join(__dirname, 'data', 'orcamentos.json'),
+  path.join(__dirname, 'data', 'usuarios.json'),
+  path.join(__dirname, 'data', 'logs.json'),
+];
+
+const dataFileHashes = new Map();
+
+async function computeDataFileHash(filePath) {
+  try {
+    const buffer = await fs.readFile(filePath);
+    return createHash('sha1').update(buffer).digest('hex');
+  } catch (err) {
+    console.error(`Erro ao calcular hash do arquivo ${filePath}:`, err);
+    return null;
+  }
+}
+
+async function emitDataFileChange(filePath) {
+  const newHash = await computeDataFileHash(filePath);
+  const previousHash = dataFileHashes.get(filePath);
+  if (!newHash || newHash === previousHash) {
+    return;
+  }
+  dataFileHashes.set(filePath, newHash);
+  broadcast('data-files-changed', { file: path.basename(filePath) });
+}
+
+async function initializeDataWatchers() {
+  await Promise.all(
+    DATA_FILES.map(async (filePath) => {
+      if (!fsSync.existsSync(filePath)) {
+        return;
+      }
+      const hash = await computeDataFileHash(filePath);
+      if (hash) {
+        dataFileHashes.set(filePath, hash);
+      }
+      fsSync.watchFile(filePath, { interval: 1000 }, () => {
+        emitDataFileChange(filePath).catch((err) => {
+          console.error(`Erro ao monitorar alterações em ${filePath}:`, err);
+        });
+      });
+    })
+  );
+}
+
 app.get('/api/events', authRequired, (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -154,6 +202,10 @@ app.get('/api/events', authRequired, (req, res) => {
     const idx = sseClients.indexOf(res);
     if (idx !== -1) sseClients.splice(idx, 1);
   });
+});
+
+initializeDataWatchers().catch((err) => {
+  console.error('Falha ao iniciar monitoramento dos arquivos de dados:', err);
 });
 
 const loginLimiter = IS_PROD

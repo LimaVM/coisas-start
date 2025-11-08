@@ -133,28 +133,15 @@ function updateSyncStatus(state) {
 let isFullSyncInProgress = false;
 let hasConnectedToEvents = false;
 let eventSourceReconnectTimeout = null;
-const REALTIME_SYNC_INTERVAL_MS = 1000;
-let realtimeSyncTimer = null;
 
 function startRealtimeSyncLoop() {
-  stopRealtimeSyncLoop();
-  realtimeSyncTimer = setInterval(() => {
-    if (!usuarioAtual || isFullSyncInProgress) {
-      return;
-    }
-    if (typeof document !== 'undefined' && document.hidden) {
-      return;
-    }
-    syncAllData();
-  }, REALTIME_SYNC_INTERVAL_MS);
+  if (!usuarioAtual || isFullSyncInProgress) {
+    return;
+  }
+  syncAllData();
 }
 
-function stopRealtimeSyncLoop() {
-  if (realtimeSyncTimer) {
-    clearInterval(realtimeSyncTimer);
-    realtimeSyncTimer = null;
-  }
-}
+function stopRealtimeSyncLoop() {}
 
 async function syncAllData({ showToast = false } = {}) {
   if (!navigator.onLine) {
@@ -252,6 +239,9 @@ function connectEventSource() {
     if (usuarioAtual?.admin) {
       scheduleResourceSync('registros', () => carregarRegistros());
     }
+  });
+  eventSource.addEventListener('data-files-changed', () => {
+    scheduleResourceSync('full-sync', () => syncAllData());
   });
   eventSource.addEventListener('connected', () => {
     updateSyncStatus('connected');
