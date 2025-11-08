@@ -370,8 +370,140 @@ async function salvarUsuarios(lista) {
   await escreverArquivoJSON(usuariosPath, lista);
 }
 
+function tentarConverterParaData(valor) {
+  if (!valor) return null;
+  if (valor instanceof Date && !Number.isNaN(valor.getTime())) return valor;
+
+  let tentativa = null;
+
+  if (typeof valor === 'number') {
+    tentativa = new Date(valor);
+  } else if (typeof valor === 'string') {
+    const trimmed = valor.trim();
+    if (trimmed) {
+      tentativa = new Date(trimmed);
+      if (Number.isNaN(tentativa.getTime())) {
+        const numerico = Number(trimmed);
+        if (!Number.isNaN(numerico)) {
+          tentativa = new Date(numerico);
+        }
+      }
+    }
+  }
+
+  if (tentativa && !Number.isNaN(tentativa.getTime())) return tentativa;
+  return null;
+}
+
+function construirDataIso(item) {
+  const candidatos = [
+    item?.timestamp,
+    item?.dataHora,
+    item?.data_hora,
+    item?.data,
+    item?.date,
+  ];
+
+  for (const candidato of candidatos) {
+    const data = tentarConverterParaData(candidato);
+    if (data) return data.toISOString();
+  }
+
+  if (item?.data && item?.hora) {
+    const composto = `${item.data} ${item.hora}`;
+    const data = tentarConverterParaData(composto);
+    if (data) return data.toISOString();
+  }
+
+  return new Date().toISOString();
+}
+
+function normalizarUsuario(item) {
+  const candidatos = [item?.usuario, item?.user, item?.login, item?.nome, item?.username];
+  for (const candidato of candidatos) {
+    if (typeof candidato === 'string' && candidato.trim()) {
+      return candidato.trim();
+    }
+  }
+  return 'desconhecido';
+}
+
+function normalizarDescricao(item) {
+  const candidatos = [item?.descricao, item?.acao, item?.mensagem, item?.message, item?.evento];
+  for (const candidato of candidatos) {
+    if (typeof candidato === 'string' && candidato.trim()) {
+      return candidato.trim();
+    }
+  }
+  return '';
+}
+
+function normalizarIP(item) {
+  const candidatos = [item?.ip, item?.ipAddress, item?.enderecoIP, item?.host];
+  for (const candidato of candidatos) {
+    if (typeof candidato === 'string' && candidato.trim()) {
+      return candidato.trim();
+    }
+  }
+  return '';
+}
+
+function normalizarUserId(item) {
+  const candidatos = [item?.userId, item?.usuarioId, item?.idUsuario];
+  for (const candidato of candidatos) {
+    if (candidato === null || candidato === undefined) continue;
+    if (typeof candidato === 'string' && candidato.trim()) {
+      return candidato.trim();
+    }
+    if (typeof candidato === 'number' && Number.isFinite(candidato)) {
+      return String(candidato);
+    }
+  }
+  return null;
+}
+
 async function obterLogs() {
-  return lerArquivoJSON(logsPath);
+  const bruto = await lerArquivoJSON(logsPath);
+  if (!Array.isArray(bruto)) return [];
+
+  const { nanoid } = await import('nanoid');
+  let precisaSalvar = false;
+  const normalizados = [];
+
+  for (const item of bruto) {
+    if (!item || typeof item !== 'object') {
+      precisaSalvar = true;
+      continue;
+    }
+
+    const registro = {
+      id: typeof item.id === 'string' && item.id.trim() ? item.id.trim() : nanoid(8),
+      timestamp: construirDataIso(item),
+      usuario: normalizarUsuario(item),
+      userId: normalizarUserId(item),
+      ip: normalizarIP(item),
+      descricao: normalizarDescricao(item),
+    };
+
+    if (!item.id || item.timestamp !== registro.timestamp || item.usuario !== registro.usuario ||
+      item.userId !== registro.userId || item.ip !== registro.ip || item.descricao !== registro.descricao) {
+      precisaSalvar = true;
+    }
+
+    normalizados.push(registro);
+  }
+
+  const ordenados = [...normalizados].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  const mesmaOrdem = ordenados.length === normalizados.length && ordenados.every((log, idx) => log.id === normalizados[idx].id);
+  if (!mesmaOrdem) {
+    precisaSalvar = true;
+  }
+
+  if (precisaSalvar) {
+    await escreverArquivoJSON(logsPath, ordenados);
+  }
+
+  return ordenados;
 }
 
 async function salvarLogs(lista) {
@@ -461,7 +593,7 @@ async function registrarAcao(req, descricao) {
       ip: req.ip,
       descricao,
     };
-    logs.push(entry);
+    logs.unshift(entry);
     await salvarLogs(logs);
     console.log(`[LOG] ${entry.timestamp} - ${entry.usuario} (${entry.ip}): ${descricao}`);
   } catch (err) {

@@ -2491,7 +2491,12 @@ async function carregarRegistros() {
     try {
       const res = await fetch('/api/logs');
       if (res.ok) {
-        registrosCache = await res.json();
+        const payload = await res.json();
+        if (Array.isArray(payload)) {
+          registrosCache = [...payload].sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+        } else {
+          registrosCache = [];
+        }
       } else {
         console.warn('Não foi possível obter registros:', res.status);
         registrosCache = [];
