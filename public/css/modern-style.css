@@ -676,6 +676,12 @@ input::placeholder, textarea::placeholder {
   font-size: 0.875rem;
 }
 
+.item-meta {
+  margin-top: var(--space-xs);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
 .item-price {
   margin-top: var(--space-sm);
   font-weight: 600;
@@ -1238,6 +1244,20 @@ button:disabled,
   box-shadow: var(--shadow-md);
 }
 
+.template-item.restricted {
+  border-style: dashed;
+  border-color: rgba(148, 163, 184, 0.6);
+  background-color: rgba(148, 163, 184, 0.08);
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.template-item.restricted:hover {
+  transform: none;
+  box-shadow: none;
+}
+
 .template-item .material-icons {
   font-size: 32px;
   margin-bottom: var(--space-sm);
@@ -1256,6 +1276,40 @@ button:disabled,
 .template-item span:last-child {
   text-align: center;
   font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.template-item small {
+  margin-top: var(--space-xs);
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.template-permissions {
+  display: grid;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+.template-permission {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-sm) var(--space-md);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-md);
+  background-color: var(--background-secondary);
+}
+
+.template-permission input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary-color);
+}
+
+.template-permission span {
+  font-size: 0.9rem;
   font-weight: 500;
 }
 
@@ -1299,6 +1353,57 @@ button:disabled,
   border: none;
 }
 
+
+.logs-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+
+.log-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-sm);
+  padding: var(--space-md);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius-lg);
+  background-color: var(--background-secondary);
+  box-shadow: var(--shadow-sm);
+}
+
+.log-main {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.log-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-sm);
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.log-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.log-time {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (min-width: 640px) {
+  .log-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .log-meta {
+    justify-content: flex-end;
+  }
+}
 
 .item-quantity {
   display: flex;

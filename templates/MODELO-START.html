@@ -73,12 +73,12 @@
 <body>
 
   <div class="cabecalho">
-    <img src="<%= logoUrl %>" alt="Logo da Empresa">
-    <p><strong>Start Brasil Equipamentos</strong><br>
-    QOF Conj. B Lote 10, Candangolândia, DF - CEP 71727-502<br>
-    E-mail: acelinoferramentas@yahoo.com.br<br>
-    (61) 9.9635-0351 – (62) 9.9815-0351</p>
-    <p><strong>Data:</strong> <%= orcamento.dataCriacaoFormatada %></p>
+    <% if (logoUrl) { %>
+      <img src="<%= logoUrl %>" alt="Logo da Empresa">
+    <% } %>
+    <p><strong><%= vendedor %></strong><br>
+    Orçamento emitido em <strong><%= orcamento.dataCriacaoFormatada %></strong><br>
+    Validade até <strong><%= orcamento.validadeFormatada %></strong></p>
   </div>
 
   <div class="info-cliente">
@@ -86,7 +86,7 @@
     <p><strong>Endereço:</strong> <%= orcamento.enderecoCliente %></p>
     <p><strong>Contato:</strong> <%= orcamento.telefoneCliente %> | <%= orcamento.emailCliente %></p>
     <p><strong>Orçamento Nº:</strong> <%= orcamento.id %></p>
-    <p><strong>Vendedor:</strong> <%= vendedor %></p>
+    <p><strong>Responsável:</strong> <%= vendedor %></p>
   </div>
 
   <div class="texto-inicial">
@@ -153,6 +153,8 @@
     <p>Cliente: <%= orcamento.nomeCliente %></p>
     <p>CPF/CNPJ: <%= orcamento.cpfCliente || '' %></p>
     <p>Referência: <%= orcamento.id %></p>
+    <p><strong>Emitido por:</strong> <%= vendedor %></p>
+    <p><em>Orçamento gerado automaticamente pelo Start Orçamentos.</em></p>
   </div>
 
 </body>

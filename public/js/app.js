@@ -243,6 +243,7 @@ let orcamentosCache = [];
 let usuariosCache = [];
 let registrosCache = [];
 let produtosSelecionados = []; // Formato: { id, nome, valorUnitario, quantidade, foto }
+let templateSelecionadoId = null;
 let deferredPrompt = null;
 let isEditing = false; // Indica se há alterações não salvas
 let currentForm = null;
@@ -320,6 +321,7 @@ const registrosLista = document.getElementById("registros-lista");
 // Elementos da página de perfil
 const perfilForm = document.getElementById("perfil-form");
 const perfilNome = document.getElementById("perfil-nome");
+const perfilDisplayName = document.getElementById("perfil-display-name");
 const perfilSenha = document.getElementById("perfil-senha");
 const perfilFotoInput = document.getElementById("perfil-foto");
 const perfilFotoPreview = document.getElementById("perfil-foto-preview");
@@ -335,6 +337,8 @@ const usuarioNome = document.getElementById("usuario-nome");
 const usuarioSenha = document.getElementById("usuario-senha");
 const usuarioAdmin = document.getElementById("usuario-admin");
 const usuarioFoto = document.getElementById("usuario-foto");
+const usuarioDisplayName = document.getElementById("usuario-display-name");
+const usuarioTemplatesContainer = document.getElementById("usuario-templates");
 
 // Elementos do modal de produto
 const produtoModal = document.getElementById("produto-modal");
@@ -878,6 +882,7 @@ function initPerfilPage() {
     try {
       const formData = new FormData();
       formData.append('usuario', perfilNome.value);
+      formData.append('displayName', perfilDisplayName.value);
       if (perfilSenha.value) formData.append('senha', perfilSenha.value);
       if (perfilFotoInput.files && perfilFotoInput.files[0]) {
         formData.append('foto', perfilFotoInput.files[0]);
@@ -886,6 +891,7 @@ function initPerfilPage() {
       if (!res.ok) throw new Error('Falha ao salvar perfil');
       const user = await res.json();
       usuarioAtual = { ...usuarioAtual, ...user };
+      localStorage.setItem('usuarioAtual', JSON.stringify(usuarioAtual));
       mostrarToast('Perfil atualizado');
     } catch (err) {
       console.error(err);
@@ -1058,9 +1064,9 @@ function initOrcamentoModal() {
         mostrarToast('Preencha todos os dados obrigatórios');
         return;
       }
-      const templateSelecionado = document.querySelector(".template-item.selected");
-      if (!templateSelecionado) {
-        mostrarToast("Selecione um template");
+      if (!templateSelecionadoId) {
+        mostrarToast("Selecione um template disponível");
+        ativarTab("template");
         return;
       }
       if (valorDescontoInput.required && !valorDescontoInput.value) {
@@ -1074,7 +1080,7 @@ function initOrcamentoModal() {
         telefoneCliente: clienteTelefone.value,
         emailCliente: clienteEmail.value,
         cpfCliente: clienteCpf.value,
-        templateId: templateSelecionado.getAttribute("data-id"),
+        templateId: templateSelecionadoId,
         produtos: produtosSelecionados.map(p => ({ id: p.id, quantidade: p.quantidade })),
         observacoes: orcamentoObservacoes.value,
         tipoDesconto: tipoDescontoSelect.value === "nenhum" ? null : tipoDescontoSelect.value,
@@ -1117,8 +1123,7 @@ function initOrcamentoModal() {
       ativarTab("produtos");
       return;
     }
-    const templateSelecionado = document.querySelector(".template-item.selected");
-    if (!templateSelecionado) {
+    if (!templateSelecionadoId) {
       mostrarToast("Selecione um template");
       ativarTab("template");
       return;
@@ -1138,7 +1143,7 @@ function initOrcamentoModal() {
         telefoneCliente: clienteTelefone.value,
         emailCliente: clienteEmail.value,
         cpfCliente: clienteCpf.value,
-        templateId: templateSelecionado.getAttribute("data-id"),
+        templateId: templateSelecionadoId,
         produtos: produtosSelecionados.map((p) => ({ id: p.id, quantidade: p.quantidade })),
         observacoes: orcamentoObservacoes.value,
         tipoDesconto: tipoDescontoSelect.value === "nenhum" ? null : tipoDescontoSelect.value,
@@ -1317,6 +1322,8 @@ async function carregarTemplates(forceReload = false) {
   } finally {
     resourceFetchPromises.templates = null;
   }
+
+  return templatesCache;
 }
 
 async function carregarOrcamentos(forceReload = false) {
@@ -1502,26 +1509,123 @@ function renderizarOrcamentos() {
   });
 }
 
-function renderizarTemplates() {
+function obterTemplatesPermitidosParaUsuario(usuario = usuarioAtual) {
+  if (!usuario || !Array.isArray(usuario.allowedTemplates)) {
+    return templatesCache.map((t) => t.id);
+  }
+  return usuario.allowedTemplates;
+}
+
+function renderizarTemplates(selectedTemplateId = null) {
   if (!templatesLista) return;
   if (templatesCache.length === 0) {
-    templatesLista.innerHTML = `<div class="empty-state"><p>Nenhum template disponível</p></div>`;
+    templatesLista.innerHTML = `
+      <div class="empty-state">
+        <span class="material-icons">hourglass_empty</span>
+        <p>Nenhum template disponível no momento.</p>
+      </div>`;
+    templateSelecionadoId = null;
     return;
   }
-  templatesLista.innerHTML = templatesCache
+
+  const permitidos = obterTemplatesPermitidosParaUsuario();
+  const possuiRestricao = Array.isArray(usuarioAtual?.allowedTemplates);
+  let templatesParaRenderizar = possuiRestricao
+    ? templatesCache.filter((t) => permitidos.includes(t.id))
+    : [...templatesCache];
+
+  const alvoSelecionado = selectedTemplateId || templateSelecionadoId;
+  if (
+    alvoSelecionado &&
+    !templatesParaRenderizar.some((t) => t.id === alvoSelecionado)
+  ) {
+    const existente = templatesCache.find((t) => t.id === alvoSelecionado);
+    if (existente) {
+      templatesParaRenderizar = [
+        ...templatesParaRenderizar,
+        { ...existente, restricted: true },
+      ];
+    }
+  }
+
+  if (templatesParaRenderizar.length === 0) {
+    templatesLista.innerHTML = `
+      <div class="empty-state">
+        <span class="material-icons">block</span>
+        <p>Seu usuário não possui templates liberados.</p>
+        <p>Solicite ao administrador a liberação de modelos.</p>
+      </div>`;
+    templateSelecionadoId = null;
+    return;
+  }
+
+  templatesLista.innerHTML = templatesParaRenderizar
     .map((template) => `
-      <div class="template-item" data-id="${template.id}">
+      <div class="template-item ${template.restricted ? 'restricted' : ''}" data-id="${template.id}" ${template.restricted ? 'data-restricted="true" aria-disabled="true"' : ''}>
         <span class="material-icons">description</span>
-        <span>${template.nome}</span>
+        <span>${escaparHtml(template.nome)}</span>
+        ${template.restricted ? '<small>Modelo não disponível para o seu usuário</small>' : ''}
       </div>
     `)
     .join("");
-  templatesLista.querySelectorAll(".template-item").forEach((item) => {
+
+  const itens = templatesLista.querySelectorAll(".template-item");
+  itens.forEach((item) => {
+    if (item.dataset.restricted === "true") {
+      item.addEventListener("click", () => {
+        mostrarToast("Este template não está liberado para o seu usuário.");
+      });
+      return;
+    }
     item.addEventListener("click", () => {
-      templatesLista.querySelectorAll(".template-item").forEach((i) => i.classList.remove("selected"));
+      itens.forEach((i) => i.classList.remove("selected"));
       item.classList.add("selected");
+      templateSelecionadoId = item.getAttribute("data-id");
     });
   });
+
+  let itemParaSelecionar = null;
+  if (alvoSelecionado) {
+    itemParaSelecionar = templatesLista.querySelector(`.template-item[data-id="${alvoSelecionado}"]`);
+  }
+  if (!itemParaSelecionar) {
+    itemParaSelecionar = templatesLista.querySelector('.template-item:not([data-restricted="true"])');
+  }
+  if (itemParaSelecionar) {
+    itemParaSelecionar.classList.add('selected');
+    if (itemParaSelecionar.dataset.restricted === 'true') {
+      templateSelecionadoId = null;
+    } else {
+      templateSelecionadoId = itemParaSelecionar.getAttribute('data-id');
+    }
+  } else {
+    templateSelecionadoId = null;
+  }
+}
+
+function preencherPermissoesTemplatesUsuario(selecionados = null) {
+  if (!usuarioTemplatesContainer) return;
+  if (templatesCache.length === 0) {
+    usuarioTemplatesContainer.innerHTML = `
+      <p class="helper-text">Cadastre modelos de orçamento para distribuí-los aos usuários.</p>`;
+    return;
+  }
+
+  const selecionadosSet = Array.isArray(selecionados)
+    ? new Set(selecionados)
+    : null;
+
+  usuarioTemplatesContainer.innerHTML = templatesCache
+    .map((template) => {
+      const marcado = !selecionadosSet || selecionadosSet.has(template.id);
+      return `
+        <label class="template-permission">
+          <input type="checkbox" value="${template.id}" ${marcado ? 'checked' : ''}>
+          <span>${escaparHtml(template.nome)}</span>
+        </label>
+      `;
+    })
+    .join('');
 }
 
 function renderizarProdutosSelecionaveis() {
@@ -1656,10 +1760,12 @@ async function abrirModalProduto(id = null) {
   setCurrentForm(produtoForm);
 }
 
-function abrirModalOrcamento() {
+async function abrirModalOrcamento() {
   orcamentoForm.reset();
   produtosSelecionados = [];
   renderizarProdutosSelecionadosNoForm();
+  templateSelecionadoId = null;
+  await carregarTemplates();
   renderizarTemplates();
   ativarTab("cliente");
   tipoDescontoSelect.value = "nenhum";
@@ -1731,10 +1837,8 @@ async function abrirModalEditarOrcamento(id) {
     }));
     renderizarProdutosSelecionadosNoForm();
     await carregarTemplates();
-    renderizarTemplates();
-    templatesLista.querySelectorAll(".template-item").forEach(item => {
-      item.classList.toggle("selected", item.getAttribute("data-id") === orc.templateId);
-    });
+    templateSelecionadoId = orc.templateId;
+    renderizarTemplates(templateSelecionadoId);
     orcamentoModal.classList.add("active");
     setCurrentForm(orcamentoForm);
     validarClienteNome(false);
@@ -2043,6 +2147,16 @@ async function gerarPdfOffline(id, acao) {
 
 // --- Funções Utilitárias --- //
 
+function escaparHtml(valor) {
+  if (valor === null || valor === undefined) return '';
+  return String(valor)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function formatarMoeda(valor) {
   const numValor = Number(valor);
   if (isNaN(numValor)) return "R$ 0,00";
@@ -2053,6 +2167,18 @@ function formatarData(dataString) {
   if (!dataString) return "";
   const data = new Date(dataString);
   return data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function formatarDataHora(dataString) {
+  if (!dataString) return "";
+  const data = new Date(dataString);
+  return data.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function mostrarToast(mensagem) {
@@ -2252,14 +2378,29 @@ function renderizarUsuarios() {
     usuariosLista.innerHTML = '<p>Nenhum usuário cadastrado</p>';
     return;
   }
-  usuariosLista.innerHTML = usuariosCache.map(u => `
-    <div class="item-card" data-id="${u.id}">
-      <div class="item-details">
-        <div class="item-title">${u.usuario}</div>
-        <div class="item-subtitle">${u.admin ? 'Admin' : 'Usuário'}</div>
+  usuariosLista.innerHTML = usuariosCache.map(u => {
+    const papel = u.admin ? 'Administrador' : 'Usuário';
+    const nomeComercial = escaparHtml(u.displayName || u.usuario);
+    const login = escaparHtml(u.usuario);
+    let infoTemplates = 'Todos os templates';
+    if (Array.isArray(u.allowedTemplates)) {
+      if (u.allowedTemplates.length === 0) {
+        infoTemplates = 'Sem templates liberados';
+      } else {
+        const qtd = u.allowedTemplates.length;
+        infoTemplates = `${qtd} template${qtd > 1 ? 's' : ''}`;
+      }
+    }
+    return `
+      <div class="item-card" data-id="${u.id}">
+        <div class="item-details">
+          <div class="item-title">${nomeComercial}</div>
+          <div class="item-subtitle">${login} • ${papel}</div>
+          <div class="item-meta">Templates: ${infoTemplates}</div>
+        </div>
       </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 
   usuariosLista.querySelectorAll('.item-card').forEach(card => {
     card.addEventListener('click', () => {
@@ -2270,21 +2411,22 @@ function renderizarUsuarios() {
   });
 }
 
-function abrirModalUsuario(usuario = null) {
+async function abrirModalUsuario(usuario = null) {
   usuarioForm.reset();
-  if (usuario) {
-    usuarioId.value = usuario.id;
-    usuarioNome.value = usuario.usuario;
-    usuarioAdmin.checked = !!usuario.admin;
-    usuarioFoto.value = '';
-    if (usuario.foto) {
-      // not previewed but inform file cannot be set programmatically
-    }
-    usuarioModalTitle.textContent = 'Editar Usuário';
-  } else {
-    usuarioId.value = '';
-    usuarioModalTitle.textContent = 'Novo Usuário';
+  usuarioId.value = usuario?.id || '';
+  usuarioNome.value = usuario?.usuario || '';
+  usuarioDisplayName.value = usuario?.displayName || usuario?.usuario || '';
+  usuarioAdmin.checked = !!(usuario && usuario.admin);
+  usuarioSenha.value = '';
+  usuarioSenha.required = !usuario;
+  if (usuarioFoto) usuarioFoto.value = '';
+  if (usuarioTemplatesContainer) {
+    usuarioTemplatesContainer.innerHTML = '<p class="helper-text">Carregando templates...</p>';
   }
+  await carregarTemplates();
+  const selecionados = Array.isArray(usuario?.allowedTemplates) ? usuario.allowedTemplates : null;
+  preencherPermissoesTemplatesUsuario(selecionados);
+  usuarioModalTitle.textContent = usuario ? 'Editar Usuário' : 'Novo Usuário';
   usuarioModal.classList.add('active');
   setCurrentForm(usuarioForm);
 }
@@ -2297,8 +2439,18 @@ usuarioForm?.addEventListener('submit', async (e) => {
   try {
     const formData = new FormData();
     formData.append('usuario', usuarioNome.value);
-    formData.append('senha', usuarioSenha.value);
+    if (usuarioSenha.value || !usuarioId.value) {
+      formData.append('senha', usuarioSenha.value);
+    }
     formData.append('admin', usuarioAdmin.checked);
+    formData.append('displayName', usuarioDisplayName.value);
+    const checkboxes = usuarioTemplatesContainer
+      ? Array.from(usuarioTemplatesContainer.querySelectorAll('input[type="checkbox"]'))
+      : [];
+    const selecionados = checkboxes
+      .filter((input) => input.checked)
+      .map((input) => input.value);
+    formData.append('allowedTemplates', JSON.stringify(selecionados));
     if (usuarioFoto.files && usuarioFoto.files[0]) {
       formData.append('foto', usuarioFoto.files[0]);
     }
@@ -2306,10 +2458,16 @@ usuarioForm?.addEventListener('submit', async (e) => {
     const url = usuarioId.value ? `/api/usuarios/${usuarioId.value}` : '/api/usuarios';
     const res = await fetch(url, { method, body: formData });
     if (!res.ok) throw new Error('Falha ao salvar usuário');
+    const salvo = await res.json();
     usuarioModal.classList.remove('active');
     isEditing = false;
     currentForm = null;
     await carregarUsuarios();
+    if (salvo && usuarioAtual && salvo.id === usuarioAtual.id) {
+      usuarioAtual = { ...usuarioAtual, ...salvo };
+      localStorage.setItem('usuarioAtual', JSON.stringify(usuarioAtual));
+      configurarMenuAdmin();
+    }
     mostrarToast('Usuário salvo');
   } catch (err) {
     console.error(err);
@@ -2361,14 +2519,19 @@ function renderizarRegistros() {
     registrosLista.innerHTML = '<p>Nenhum registro disponível</p>';
     return;
   }
-  registrosLista.innerHTML = registrosCache.map(l => `
-    <div class="item-card">
-      <div class="item-details">
-        <div class="item-title">${l.descricao}</div>
-        <div class="item-subtitle">${formatarData(l.timestamp)} - ${l.usuario}</div>
-      </div>
-    </div>
-  `).join('');
+  registrosLista.innerHTML = `
+    <div class="logs-list">
+      ${registrosCache.map(l => `
+        <div class="log-row">
+          <div class="log-main">${escaparHtml(l.descricao)}</div>
+          <div class="log-meta">
+            <span class="log-time"><span class="material-icons" aria-hidden="true">schedule</span>${formatarDataHora(l.timestamp)}</span>
+            <span><span class="material-icons" aria-hidden="true">person</span>${escaparHtml(l.usuario || 'Desconhecido')}</span>
+            <span><span class="material-icons" aria-hidden="true">public</span>${escaparHtml(l.ip || '-/-')}</span>
+          </div>
+        </div>
+      `).join('')}
+    </div>`;
 }
 
 async function carregarPerfil() {
@@ -2378,7 +2541,10 @@ async function carregarPerfil() {
     if (res.ok) {
       const user = await res.json();
       perfilNome.value = user.usuario;
+      if (perfilDisplayName) perfilDisplayName.value = user.displayName || user.usuario;
       if (user.foto) perfilFotoPreview.src = user.foto;
+      usuarioAtual = { ...usuarioAtual, ...user };
+      localStorage.setItem('usuarioAtual', JSON.stringify(usuarioAtual));
     } else {
       console.warn('Não foi possível carregar perfil:', res.status);
     }

@@ -264,6 +264,11 @@
             <input type="text" id="perfil-nome" required>
           </div>
           <div class="form-group">
+            <label for="perfil-display-name">Nome do vendedor / empresa</label>
+            <input type="text" id="perfil-display-name" required>
+            <span class="helper-text">Esse nome aparecerá em todos os orçamentos que você gerar.</span>
+          </div>
+          <div class="form-group">
             <label for="perfil-senha">Nova senha</label>
             <input type="password" id="perfil-senha">
           </div>
@@ -619,11 +624,22 @@
             <input type="password" id="usuario-senha" required>
           </div>
           <div class="form-group">
+            <label for="usuario-display-name">Nome do vendedor / empresa</label>
+            <input type="text" id="usuario-display-name" required>
+            <span class="helper-text">Esse nome será exibido nos orçamentos emitidos por este usuário.</span>
+          </div>
+          <div class="form-group">
             <label for="usuario-foto">Foto de perfil</label>
             <input type="file" id="usuario-foto" accept="image/*">
           </div>
           <div class="form-group checkbox-group">
             <label><input type="checkbox" id="usuario-admin"> Administrador</label>
+          </div>
+          <div class="form-group">
+            <label>Templates disponíveis</label>
+            <div id="usuario-templates" class="template-permissions">
+              <p class="helper-text">Selecione quais modelos de orçamento esse usuário pode utilizar.</p>
+            </div>
           </div>
           <div class="form-actions">
             <button type="button" class="btn btn-secondary modal-cancel">Cancelar</button>

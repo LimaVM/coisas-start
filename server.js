@@ -378,6 +378,77 @@ async function salvarLogs(lista) {
   await escreverArquivoJSON(logsPath, lista);
 }
 
+async function listarTemplatesDisponiveis() {
+  try {
+    const templatesDir = path.join(__dirname, "templates");
+    const arquivos = await fs.readdir(templatesDir);
+    return arquivos.filter((arquivo) => arquivo.endsWith('.html'));
+  } catch (err) {
+    return [];
+  }
+}
+
+async function normalizarTemplatesPermitidos(valor) {
+  if (valor === undefined) return undefined;
+
+  let lista = valor;
+  if (typeof lista === 'string') {
+    if (!lista.trim()) {
+      lista = [];
+    } else {
+      try {
+        lista = JSON.parse(lista);
+      } catch (err) {
+        lista = lista.split(',').map((item) => item.trim()).filter(Boolean);
+      }
+    }
+  }
+
+  if (!Array.isArray(lista)) {
+    lista = [];
+  }
+
+  const disponiveis = await listarTemplatesDisponiveis();
+  if (disponiveis.length === 0) {
+    return undefined;
+  }
+
+  const set = new Set();
+  for (const item of lista) {
+    if (typeof item !== 'string') continue;
+    if (!item.endsWith('.html')) continue;
+    if (item.includes('..') || item.includes('/')) continue;
+    if (!disponiveis.includes(item)) continue;
+    set.add(item);
+  }
+
+  return Array.from(set);
+}
+
+function mapearUsuarioParaResposta(usuario) {
+  if (!usuario) return null;
+  const { senha, ...restante } = usuario;
+  return {
+    ...restante,
+    displayName: usuario.displayName || usuario.usuario,
+    allowedTemplates: Array.isArray(usuario.allowedTemplates)
+      ? usuario.allowedTemplates
+      : undefined,
+  };
+}
+
+function formatarNomeTemplate(arquivo) {
+  return arquivo
+    .replace('.html', '')
+    .replace(/[_-]+/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map((palavra) => palavra.length <= 2
+      ? palavra.toUpperCase()
+      : palavra.charAt(0).toUpperCase() + palavra.slice(1).toLowerCase())
+    .join(' ');
+}
+
 async function registrarAcao(req, descricao) {
   try {
     const logs = await obterLogs();
@@ -429,10 +500,17 @@ app.post("/api/login", loginLimiter, async (req, res) => {
     console.log(`[LOGIN FAIL] ${ip} - senha incorreta para "${usuario}" via ${deviceInfo}`);
     return res.status(401).json({ erro: "Usuário ou senha incorretos" });
   }
-  req.session.usuario = { id: found.id, usuario: found.usuario, admin: found.admin };
+  const usuarioResposta = mapearUsuarioParaResposta(found);
+  req.session.usuario = {
+    id: found.id,
+    usuario: found.usuario,
+    admin: found.admin,
+    displayName: usuarioResposta.displayName,
+    allowedTemplates: usuarioResposta.allowedTemplates,
+  };
   console.log(`[LOGIN OK] ${ip} - usuário "${usuario}" logado usando ${deviceInfo}`);
   await registrarAcao(req, 'Login realizado');
-  res.json({ id: found.id, usuario: found.usuario, admin: found.admin });
+  res.json(usuarioResposta);
 });
 
 app.post("/api/logout", (req, res) => {
@@ -442,8 +520,19 @@ app.post("/api/logout", (req, res) => {
   });
 });
 
-app.get("/api/session", (req, res) => {
+app.get("/api/session", async (req, res) => {
   if (req.session.usuario) {
+    const usuarios = await obterUsuarios();
+    const atual = usuarios.find((u) => u.id === req.session.usuario.id);
+    const usuarioResposta = atual ? mapearUsuarioParaResposta(atual) : req.session.usuario;
+    req.session.usuario = {
+      id: req.session.usuario.id,
+      usuario: usuarioResposta.usuario || req.session.usuario.usuario,
+      admin: !!usuarioResposta.admin,
+      displayName: usuarioResposta.displayName || req.session.usuario.displayName,
+      allowedTemplates: usuarioResposta.allowedTemplates,
+      foto: usuarioResposta.foto || req.session.usuario.foto || null,
+    };
     res.json({ autenticado: true, usuario: req.session.usuario });
   } else {
     res.json({ autenticado: false });
@@ -459,12 +548,14 @@ app.get("/api/usuarios/me", authRequired, async (req, res) => {
   const usuarios = await obterUsuarios();
   const user = usuarios.find(u => u.id === req.session.usuario.id);
   if (!user) return res.status(404).json({ erro: "Usuário não encontrado" });
-  const { senha, ...semSenha } = user;
-  res.json(semSenha);
+  const resposta = mapearUsuarioParaResposta(user);
+  req.session.usuario.displayName = resposta.displayName;
+  req.session.usuario.allowedTemplates = resposta.allowedTemplates;
+  res.json(resposta);
 });
 
 app.put("/api/usuarios/me", authRequired, upload.single("foto"), async (req, res) => {
-  const { usuario, senha } = req.body;
+  const { usuario, senha, displayName } = req.body;
   const usuarios = await obterUsuarios();
   const index = usuarios.findIndex(u => u.id === req.session.usuario.id);
   if (index === -1) return res.status(404).json({ erro: "Usuário não encontrado" });
@@ -475,6 +566,13 @@ app.put("/api/usuarios/me", authRequired, upload.single("foto"), async (req, res
     usuarios[index].usuario = usuario;
     req.session.usuario.usuario = usuario;
   }
+  if (displayName !== undefined) {
+    if (!displayName.trim()) {
+      return res.status(400).json({ erro: "Nome do vendedor não pode ficar vazio" });
+    }
+    usuarios[index].displayName = displayName.trim();
+    req.session.usuario.displayName = usuarios[index].displayName;
+  }
   if (senha) usuarios[index].senha = await bcrypt.hash(senha, 10);
   if (req.file) {
     const buffer = await toWebp(req.file.buffer);
@@ -482,23 +580,29 @@ app.put("/api/usuarios/me", authRequired, upload.single("foto"), async (req, res
     usuarios[index].foto = `data:image/webp;base64,${buffer.toString('base64')}`;
   }
   await salvarUsuarios(usuarios);
-  const { senha: s, ...updatedUser } = usuarios[index];
-  res.json(updatedUser);
+  const resposta = mapearUsuarioParaResposta(usuarios[index]);
+  req.session.usuario.allowedTemplates = resposta.allowedTemplates;
+  res.json(resposta);
 });
 
 // CRUD de usuários (admin)
 app.get("/api/usuarios", authRequired, adminRequired, async (req, res) => {
   const usuarios = await obterUsuarios();
-  const semSenha = usuarios.map(({ senha, ...rest }) => rest);
-  res.json(semSenha);
+  const resposta = usuarios.map(mapearUsuarioParaResposta);
+  res.json(resposta);
 });
 
 app.post("/api/usuarios", authRequired, adminRequired, upload.single("foto"), async (req, res) => {
-  const { usuario, senha, admin } = req.body;
+  const { usuario, senha, admin, displayName } = req.body;
   if (!usuario || !senha) return res.status(400).json({ erro: "Dados inválidos" });
   const usuarios = await obterUsuarios();
   if (usuarios.find((u) => u.usuario === usuario)) {
     return res.status(400).json({ erro: "Usuário já existe" });
+  }
+  const allowedTemplates = await normalizarTemplatesPermitidos(req.body.allowedTemplates);
+  const nomeVendedor = (displayName ?? usuario).toString().trim();
+  if (!nomeVendedor) {
+    return res.status(400).json({ erro: "Nome do vendedor inválido" });
   }
   const { nanoid } = await import("nanoid");
   const novo = {
@@ -507,7 +611,11 @@ app.post("/api/usuarios", authRequired, adminRequired, upload.single("foto"), as
     senha: await bcrypt.hash(senha, 10),
     admin: admin === true || admin === "true" || admin === "1" || admin === 1,
     foto: null,
+    displayName: nomeVendedor,
   };
+  if (allowedTemplates !== undefined) {
+    novo.allowedTemplates = allowedTemplates;
+  }
   if (req.file) {
     const buffer = await toWebp(req.file.buffer);
     req.file.buffer = null;
@@ -518,11 +626,11 @@ app.post("/api/usuarios", authRequired, adminRequired, upload.single("foto"), as
   const isAdmin = novo.admin;
   await registrarAcao(req, `Criou usuário ${usuario} (admin=${isAdmin})`);
   broadcast('usuarios-updated');
-  res.status(201).json({ id: novo.id, usuario: novo.usuario, admin: novo.admin });
+  res.status(201).json(mapearUsuarioParaResposta(novo));
 });
 
 app.put("/api/usuarios/:id", authRequired, adminRequired, upload.single("foto"), async (req, res) => {
-  const { usuario, senha, admin } = req.body;
+  const { usuario, senha, admin, displayName } = req.body;
   const usuarios = await obterUsuarios();
   const index = usuarios.findIndex((u) => u.id === req.params.id);
   if (index === -1) return res.status(404).json({ erro: "Usuário não encontrado" });
@@ -532,9 +640,19 @@ app.put("/api/usuarios/:id", authRequired, adminRequired, upload.single("foto"),
     }
     usuarios[index].usuario = usuario;
   }
+  if (displayName !== undefined) {
+    if (!displayName.trim()) {
+      return res.status(400).json({ erro: "Nome do vendedor não pode ficar vazio" });
+    }
+    usuarios[index].displayName = displayName.trim();
+  }
   if (senha) usuarios[index].senha = await bcrypt.hash(senha, 10);
   if (admin !== undefined) {
     usuarios[index].admin = admin === true || admin === "true" || admin === "1" || admin === 1;
+  }
+  const allowedTemplates = await normalizarTemplatesPermitidos(req.body.allowedTemplates);
+  if (allowedTemplates !== undefined) {
+    usuarios[index].allowedTemplates = allowedTemplates;
   }
   if (req.file) {
     const buffer = await toWebp(req.file.buffer);
@@ -543,8 +661,18 @@ app.put("/api/usuarios/:id", authRequired, adminRequired, upload.single("foto"),
   }
   await salvarUsuarios(usuarios);
   broadcast('usuarios-updated');
-  const { senha: s, ...usuarioResp } = usuarios[index];
-  res.json(usuarioResp);
+  const resposta = mapearUsuarioParaResposta(usuarios[index]);
+  if (req.session.usuario.id === usuarios[index].id) {
+    req.session.usuario = {
+      ...req.session.usuario,
+      usuario: resposta.usuario,
+      admin: resposta.admin,
+      displayName: resposta.displayName,
+      allowedTemplates: resposta.allowedTemplates,
+      foto: resposta.foto || req.session.usuario.foto || null,
+    };
+  }
+  res.json(resposta);
 });
 
 app.delete("/api/usuarios/:id", authRequired, adminRequired, async (req, res) => {
@@ -686,7 +814,7 @@ app.get("/api/templates", async (req, res, next) => {
     const arquivos = await fs.readdir(templatesDir);
     const templates = arquivos
       .filter((arquivo) => arquivo.endsWith(".html"))
-      .map((arquivo) => ({ id: arquivo, nome: arquivo.replace(".html", "") }));
+      .map((arquivo) => ({ id: arquivo, nome: formatarNomeTemplate(arquivo) }));
     res.json(templates);
   } catch (error) {
     if (error.code === "ENOENT") {
@@ -796,6 +924,14 @@ app.post("/api/orcamentos", authRequired, async (req, res, next) => {
       await fs.access(path.join(__dirname, "templates", templateId));
     } catch (error) {
       return res.status(400).json({ erro: `Template ${templateId} não encontrado` });
+    }
+
+    const usuarios = await obterUsuarios();
+    const usuarioCriador = usuarios.find((u) => u.id === req.session.usuario.id);
+    if (!req.session.usuario.admin && usuarioCriador && Array.isArray(usuarioCriador.allowedTemplates) && usuarioCriador.allowedTemplates.length > 0) {
+      if (!usuarioCriador.allowedTemplates.includes(templateId)) {
+        return res.status(403).json({ erro: "Você não tem permissão para usar este template" });
+      }
     }
 
     const todosProdutosCadastrados = await lerArquivoJSON(path.join(__dirname, "data", "produtos.json"));
@@ -922,6 +1058,14 @@ app.put("/api/orcamentos/:id", authRequired, async (req, res, next) => {
       await fs.access(path.join(__dirname, "templates", templateId));
     } catch (error) {
       return res.status(400).json({ erro: `Template ${templateId} não encontrado` });
+    }
+
+    const usuarios = await obterUsuarios();
+    const usuarioAtual = usuarios.find((u) => u.id === req.session.usuario.id);
+    if (!req.session.usuario.admin && usuarioAtual && Array.isArray(usuarioAtual.allowedTemplates) && usuarioAtual.allowedTemplates.length > 0) {
+      if (!usuarioAtual.allowedTemplates.includes(templateId)) {
+        return res.status(403).json({ erro: "Você não tem permissão para usar este template" });
+      }
     }
 
     const produtosCadastrados = await lerArquivoJSON(path.join(__dirname, "data", "produtos.json"));
@@ -1053,7 +1197,7 @@ async function renderizarHtmlOrcamento(orcamentoId) {
   try {
       const usuarios = await obterUsuarios();
       const vendedor = usuarios.find(u => u.id === orcamento.userId);
-      if (vendedor) vendedorNome = vendedor.usuario;
+      if (vendedor) vendedorNome = vendedor.displayName || vendedor.usuario;
   } catch (vendError) {
       console.warn("Não foi possível determinar o vendedor do orçamento:", vendError);
   }
