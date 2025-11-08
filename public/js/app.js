@@ -111,6 +111,18 @@ function scheduleResourceSync(resourceKey, task, delay = RESOURCE_SYNC_DELAY) {
   scheduledResourceSyncs.set(resourceKey, timeoutId);
 }
 
+function parseEventPayload(event) {
+  if (!event || typeof event.data !== 'string' || event.data.trim() === '') {
+    return null;
+  }
+  try {
+    return JSON.parse(event.data);
+  } catch (err) {
+    console.warn('Falha ao interpretar payload do evento SSE', err);
+    return null;
+  }
+}
+
 function updateSyncStatus(state) {
   if (!syncStatus || !syncStatusText) return;
   syncStatus.dataset.state = state;
@@ -200,9 +212,19 @@ function connectEventSource() {
   eventSource.addEventListener('orcamentos-updated', () => {
     scheduleResourceSync('orcamentos', () => carregarOrcamentos(true));
   });
-  eventSource.addEventListener('usuarios-updated', () => {
+  eventSource.addEventListener('usuarios-updated', (event) => {
+    const payload = parseEventPayload(event);
     if (usuarioAtual?.admin) {
       scheduleResourceSync('usuarios', () => carregarUsuarios());
+    }
+    const targetId = payload?.userId;
+    if (targetId && usuarioAtual && usuarioAtual.id === targetId) {
+      scheduleResourceSync('session', () => atualizarSessaoAtual());
+    }
+  });
+  eventSource.addEventListener('registros-updated', () => {
+    if (usuarioAtual?.admin) {
+      scheduleResourceSync('registros', () => carregarRegistros());
     }
   });
   eventSource.addEventListener('connected', () => {
@@ -259,6 +281,7 @@ const resourceFetchPromises = {
   usuarios: null,
   registros: null,
 };
+let sessionRefreshPromise = null;
 
 // Elementos DOM frequentemente acessados
 const appContent = document.getElementById("app-content");
@@ -573,6 +596,79 @@ function configurarMenuAdmin() {
   document.querySelectorAll('.admin-only').forEach(el => {
     el.style.display = usuarioAtual && usuarioAtual.admin ? '' : 'none';
   });
+}
+
+async function atualizarSessaoAtual({ forceFullSync = true } = {}) {
+  if (sessionRefreshPromise) {
+    return sessionRefreshPromise;
+  }
+
+  const previousSnapshot = usuarioAtual
+    ? JSON.stringify({
+        id: usuarioAtual.id || null,
+        usuario: usuarioAtual.usuario || '',
+        admin: !!usuarioAtual.admin,
+        displayName: usuarioAtual.displayName || '',
+        allowedTemplates: Array.isArray(usuarioAtual.allowedTemplates)
+          ? [...usuarioAtual.allowedTemplates].sort()
+          : [],
+      })
+    : null;
+
+  sessionRefreshPromise = (async () => {
+    try {
+      const res = await fetch('/api/session');
+      if (!res.ok) {
+        throw new Error(`Falha ao atualizar sessão: ${res.status}`);
+      }
+      const data = await res.json();
+      if (!data.autenticado) {
+        if (eventSource) {
+          eventSource.close();
+          eventSource = null;
+        }
+        hasConnectedToEvents = false;
+        updateSyncStatus('offline');
+        usuarioAtual = null;
+        localStorage.removeItem('usuarioAtual');
+        configurarMenuAdmin();
+        loginModal?.classList.add('active');
+        mostrarToast('Sua sessão foi finalizada. Faça login novamente.', 'warning');
+        return false;
+      }
+
+      usuarioAtual = data.usuario;
+      localStorage.setItem('usuarioAtual', JSON.stringify(usuarioAtual));
+      configurarMenuAdmin();
+
+      const nextSnapshot = JSON.stringify({
+        id: usuarioAtual.id || null,
+        usuario: usuarioAtual.usuario || '',
+        admin: !!usuarioAtual.admin,
+        displayName: usuarioAtual.displayName || '',
+        allowedTemplates: Array.isArray(usuarioAtual.allowedTemplates)
+          ? [...usuarioAtual.allowedTemplates].sort()
+          : [],
+      });
+
+      if (forceFullSync && previousSnapshot !== nextSnapshot) {
+        await syncAllData();
+      }
+
+      if (currentPage === 'perfil') {
+        await carregarPerfil();
+      }
+
+      return true;
+    } catch (err) {
+      console.error('Erro ao atualizar sessão', err);
+      return false;
+    } finally {
+      sessionRefreshPromise = null;
+    }
+  })();
+
+  return sessionRefreshPromise;
 }
 
 async function verificarSessao() {

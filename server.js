@@ -596,6 +596,7 @@ async function registrarAcao(req, descricao) {
     logs.unshift(entry);
     await salvarLogs(logs);
     console.log(`[LOG] ${entry.timestamp} - ${entry.usuario} (${entry.ip}): ${descricao}`);
+    broadcast('registros-updated', { entryId: entry.id });
   } catch (err) {
     console.error('Erro ao registrar ação:', err);
   }
@@ -656,9 +657,14 @@ app.get("/api/session", async (req, res) => {
   if (req.session.usuario) {
     const usuarios = await obterUsuarios();
     const atual = usuarios.find((u) => u.id === req.session.usuario.id);
-    const usuarioResposta = atual ? mapearUsuarioParaResposta(atual) : req.session.usuario;
+    if (!atual) {
+      req.session.destroy(() => {});
+      res.clearCookie('connect.sid');
+      return res.json({ autenticado: false });
+    }
+    const usuarioResposta = mapearUsuarioParaResposta(atual);
     req.session.usuario = {
-      id: req.session.usuario.id,
+      id: usuarioResposta.id || req.session.usuario.id,
       usuario: usuarioResposta.usuario || req.session.usuario.usuario,
       admin: !!usuarioResposta.admin,
       displayName: usuarioResposta.displayName || req.session.usuario.displayName,
@@ -714,6 +720,8 @@ app.put("/api/usuarios/me", authRequired, upload.single("foto"), async (req, res
   await salvarUsuarios(usuarios);
   const resposta = mapearUsuarioParaResposta(usuarios[index]);
   req.session.usuario.allowedTemplates = resposta.allowedTemplates;
+  await registrarAcao(req, 'Atualizou o próprio perfil');
+  broadcast('usuarios-updated', { type: 'self-updated', userId: usuarios[index].id });
   res.json(resposta);
 });
 
@@ -757,7 +765,7 @@ app.post("/api/usuarios", authRequired, adminRequired, upload.single("foto"), as
   await salvarUsuarios(usuarios);
   const isAdmin = novo.admin;
   await registrarAcao(req, `Criou usuário ${usuario} (admin=${isAdmin})`);
-  broadcast('usuarios-updated');
+  broadcast('usuarios-updated', { type: 'created', userId: novo.id });
   res.status(201).json(mapearUsuarioParaResposta(novo));
 });
 
@@ -792,7 +800,8 @@ app.put("/api/usuarios/:id", authRequired, adminRequired, upload.single("foto"),
     usuarios[index].foto = `data:image/webp;base64,${buffer.toString('base64')}`;
   }
   await salvarUsuarios(usuarios);
-  broadcast('usuarios-updated');
+  await registrarAcao(req, `Atualizou usuário ${usuarios[index].usuario}`);
+  broadcast('usuarios-updated', { type: 'updated', userId: usuarios[index].id });
   const resposta = mapearUsuarioParaResposta(usuarios[index]);
   if (req.session.usuario.id === usuarios[index].id) {
     req.session.usuario = {
@@ -811,9 +820,11 @@ app.delete("/api/usuarios/:id", authRequired, adminRequired, async (req, res) =>
   const usuarios = await obterUsuarios();
   const index = usuarios.findIndex((u) => u.id === req.params.id);
   if (index === -1) return res.status(404).json({ erro: "Usuário não encontrado" });
+  const removido = usuarios[index];
   usuarios.splice(index, 1);
   await salvarUsuarios(usuarios);
-  broadcast('usuarios-updated');
+  await registrarAcao(req, `Removeu usuário ${removido.usuario}`);
+  broadcast('usuarios-updated', { type: 'deleted', userId: removido.id });
   res.json({ mensagem: "Usuário removido" });
 });
 
