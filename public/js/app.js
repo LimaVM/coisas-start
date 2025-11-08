@@ -133,6 +133,28 @@ function updateSyncStatus(state) {
 let isFullSyncInProgress = false;
 let hasConnectedToEvents = false;
 let eventSourceReconnectTimeout = null;
+const REALTIME_SYNC_INTERVAL_MS = 1000;
+let realtimeSyncTimer = null;
+
+function startRealtimeSyncLoop() {
+  stopRealtimeSyncLoop();
+  realtimeSyncTimer = setInterval(() => {
+    if (!usuarioAtual || isFullSyncInProgress) {
+      return;
+    }
+    if (typeof document !== 'undefined' && document.hidden) {
+      return;
+    }
+    syncAllData();
+  }, REALTIME_SYNC_INTERVAL_MS);
+}
+
+function stopRealtimeSyncLoop() {
+  if (realtimeSyncTimer) {
+    clearInterval(realtimeSyncTimer);
+    realtimeSyncTimer = null;
+  }
+}
 
 async function syncAllData({ showToast = false } = {}) {
   if (!navigator.onLine) {
@@ -155,8 +177,6 @@ async function syncAllData({ showToast = false } = {}) {
   isFullSyncInProgress = true;
   updateSyncStatus('syncing');
 
-  invalidateCache('all');
-
   const tarefas = [
     carregarProdutos(true),
     carregarTemplates(true),
@@ -171,6 +191,12 @@ async function syncAllData({ showToast = false } = {}) {
   try {
     const resultados = await Promise.allSettled(tarefas);
     const houveErro = resultados.some((resultado) => resultado.status === 'rejected');
+
+    if (!houveErro) {
+      renderizarTemplates(templateSelecionadoId);
+      sincronizarProdutosSelecionadosComCache();
+      renderizarProdutosSelecionaveis();
+    }
 
     if (houveErro) {
       console.warn('Nem todos os dados foram sincronizados corretamente.', resultados);
@@ -631,6 +657,7 @@ async function atualizarSessaoAtual({ forceFullSync = true } = {}) {
         updateSyncStatus('offline');
         usuarioAtual = null;
         localStorage.removeItem('usuarioAtual');
+        stopRealtimeSyncLoop();
         configurarMenuAdmin();
         loginModal?.classList.add('active');
         mostrarToast('Sua sessão foi finalizada. Faça login novamente.', 'warning');
@@ -689,6 +716,7 @@ async function verificarSessao() {
       }
       hasConnectedToEvents = false;
       updateSyncStatus('offline');
+      stopRealtimeSyncLoop();
       loginModal.classList.add('active');
       if (loginForm) {
         loginForm.addEventListener('submit', async (e) => {
@@ -712,6 +740,7 @@ async function verificarSessao() {
       }
       hasConnectedToEvents = false;
       updateSyncStatus('offline');
+      stopRealtimeSyncLoop();
       loginModal.classList.add('active');
     }
   }
@@ -752,6 +781,7 @@ function iniciarAplicacao() {
   initPerfilPage();
   carregarDadosIniciais();
   connectEventSource();
+  startRealtimeSyncLoop();
   initInstallPrompt();
   if ("Notification" in window && Notification.permission === "default") {
     Notification.requestPermission();
@@ -772,6 +802,12 @@ document.addEventListener("DOMContentLoaded", () => {
     processarFilaOffline();
   }
   verificarSessao();
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && usuarioAtual) {
+    syncAllData();
+  }
 });
 
 window.addEventListener("popstate", async (e) => {
@@ -1006,6 +1042,7 @@ function initPerfilPage() {
     updateSyncStatus('offline');
     usuarioAtual = null;
     localStorage.removeItem('usuarioAtual');
+    stopRealtimeSyncLoop();
     loginModal.classList.add('active');
   });
   carregarPerfil();
@@ -1038,7 +1075,12 @@ function initProdutoModal() {
   produtoForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!navigator.onLine) {
-      const dados = { nome: produtoNome.value, descricao: produtoDescricao.value, valor: produtoValor.value };
+      const valorDigitado = parseFloat((produtoValor.value || '0').toString().replace(',', '.'));
+      const dados = {
+        nome: produtoNome.value,
+        descricao: produtoDescricao.value,
+        valor: Number.isFinite(valorDigitado) ? valorDigitado : 0,
+      };
       if (produtoFotoInput.files && produtoFotoInput.files[0]) {
         const reader = new FileReader();
         reader.onload = () => {
@@ -1048,6 +1090,8 @@ function initProdutoModal() {
           const tempId = 'off-' + Date.now();
           produtosCache.push({ id: tempId, ...dados });
           renderizarProdutos();
+          sincronizarProdutosSelecionadosComCache();
+          renderizarProdutosSelecionaveis();
           produtoModal.classList.remove("active");
           mostrarToast('Produto salvo offline');
         };
@@ -1058,6 +1102,8 @@ function initProdutoModal() {
         const tempId = 'off-' + Date.now();
         produtosCache.push({ id: tempId, ...dados });
         renderizarProdutos();
+        sincronizarProdutosSelecionadosComCache();
+        renderizarProdutosSelecionaveis();
         produtoModal.classList.remove("active");
         mostrarToast('Produto salvo offline');
       }
@@ -1085,7 +1131,42 @@ function initProdutoModal() {
         throw new Error(errorData.erro || `Erro ${response.status} ao salvar produto`);
       }
 
-      await carregarProdutos(); // Recarrega a lista para refletir a mudança
+      const produtoSalvo = await response.json();
+      const valorDigitado = parseFloat((produtoValor.value || '0').toString().replace(',', '.'));
+      const valorNormalizado = typeof produtoSalvo.valor === 'number'
+        ? produtoSalvo.valor
+        : (Number.isFinite(valorDigitado)
+          ? valorDigitado
+          : (produtoId.value ? produtosCache.find((p) => p.id === produtoId.value)?.valor || 0 : 0));
+      const fotoAtual = (produtoFotoInput.files && produtoFotoInput.files[0])
+        ? fotoPreview.src
+        : (produtoSalvo.id ? produtosCache.find((p) => p.id === produtoSalvo.id)?.foto || null : null);
+
+      if (produtoId.value) {
+        const indiceExistente = produtosCache.findIndex((p) => p.id === produtoId.value);
+        if (indiceExistente !== -1) {
+          produtosCache[indiceExistente] = {
+            ...produtosCache[indiceExistente],
+            ...produtoSalvo,
+            valor: valorNormalizado,
+            foto: fotoAtual || produtosCache[indiceExistente].foto || null,
+          };
+        }
+      } else {
+        const novoProduto = {
+          ...produtoSalvo,
+          valor: valorNormalizado,
+          foto: fotoAtual || null,
+        };
+        produtosCache = produtosCache.filter((p) => p.id !== novoProduto.id);
+        produtosCache.push(novoProduto);
+      }
+
+      renderizarProdutos();
+      sincronizarProdutosSelecionadosComCache();
+      renderizarProdutosSelecionaveis();
+
+      await carregarProdutos(true); // Garante dados sincronizados com o servidor
       produtoModal.classList.remove("active");
       isEditing = false;
       currentForm = null;
@@ -1387,6 +1468,8 @@ async function carregarProdutos(forceReload = false) {
   }
 
   renderizarProdutos();
+  sincronizarProdutosSelecionadosComCache();
+  renderizarProdutosSelecionaveis();
 }
 
 async function carregarTemplates(forceReload = false) {
@@ -1785,28 +1868,62 @@ function renderizarProdutosSelecionadosNoForm() {
 
   produtosSelecionadosEl.innerHTML = produtosSelecionados
     .map((produto) => {
-        const imgSrc = produto.foto ? produto.foto : "/images/placeholder.png";
-        return `
-          <div class="selected-item" data-id="${produto.id}">
-            <img src="${imgSrc}" alt="${produto.nome}" class="item-image-small" loading="lazy">
-            <div class="item-details">
-              <span>${produto.nome} (Qtd: ${produto.quantidade})</span>
-            </div>
-            <button class="btn-icon remove-produto-selecionado" aria-label="Remover">
-              <span class="material-icons">close</span>
-            </button>
+      const imgSrc = produto.foto ? produto.foto : "/images/placeholder.png";
+      return `
+        <div class="selected-item" data-id="${produto.id}">
+          <img src="${imgSrc}" alt="${produto.nome}" class="item-image-small" loading="lazy">
+          <div class="item-details">
+            <span class="selected-item-name">${produto.nome}</span>
+            <span class="selected-item-price">${formatarMoeda(produto.valorUnitario)} • Quantidade: ${produto.quantidade}</span>
           </div>
-        `;
+          <button class="btn-icon remove-produto-selecionado" aria-label="Remover">
+            <span class="material-icons">close</span>
+          </button>
+        </div>
+      `;
     })
     .join("");
 
   produtosSelecionadosEl.querySelectorAll(".remove-produto-selecionado").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const produtoId = e.target.closest(".selected-item").getAttribute("data-id");
-        atualizarQuantidadeProdutoSelecionado(produtoId, 0); // Remove ao setar qtd para 0
-        renderizarProdutosSelecionadosNoForm(); // Re-renderiza a lista no form
-      });
+    btn.addEventListener("click", (e) => {
+      const produtoId = e.target.closest(".selected-item").getAttribute("data-id");
+      atualizarQuantidadeProdutoSelecionado(produtoId, 0);
+      renderizarProdutosSelecionadosNoForm();
     });
+  });
+}
+
+function sincronizarProdutosSelecionadosComCache() {
+  if (!Array.isArray(produtosSelecionados) || produtosSelecionados.length === 0) {
+    return;
+  }
+
+  const removidos = [];
+  const atualizados = produtosSelecionados
+    .map((selecionado) => {
+      const produtoAtual = produtosCache.find((produto) => produto.id === selecionado.id);
+      if (!produtoAtual) {
+        removidos.push(selecionado);
+        return null;
+      }
+      return {
+        ...selecionado,
+        nome: produtoAtual.nome,
+        valorUnitario: produtoAtual.valor,
+        foto: produtoAtual.foto || selecionado.foto || null,
+      };
+    })
+    .filter(Boolean);
+
+  if (
+    removidos.length > 0 &&
+    removidos.some((item) => !String(item.id || '').startsWith('off-'))
+  ) {
+    mostrarToast('Alguns produtos foram removidos e não estão mais disponíveis.', 'warning');
+  }
+
+  produtosSelecionados = atualizados;
+  renderizarProdutosSelecionadosNoForm();
 }
 
 // --- Funções de Abertura de Modais --- //
@@ -1996,7 +2113,15 @@ async function excluirProduto(id) {
     if (!response.ok) {
       throw new Error("Erro ao excluir produto");
     }
-    await carregarProdutos();
+    produtosCache = produtosCache.filter((produto) => produto.id !== id);
+    const quantidadeSelecionadosAntes = produtosSelecionados.length;
+    produtosSelecionados = produtosSelecionados.filter((produto) => produto.id !== id);
+    renderizarProdutos();
+    renderizarProdutosSelecionaveis();
+    if (produtosSelecionados.length !== quantidadeSelecionadosAntes) {
+      renderizarProdutosSelecionadosNoForm();
+    }
+    await carregarProdutos(true);
     mostrarToast("Produto excluído com sucesso!");
   } catch (error) {
     console.error("Erro ao excluir produto:", error);
