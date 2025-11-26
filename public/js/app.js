@@ -85,35 +85,122 @@ function invalidateCache(cacheKey) {
   }
 }
 
-// Função para forçar recarregamento de dados
-async function forceReloadData() {
-  invalidateCache('all');
-  
+const SYNC_STATUS_TEXT = {
+  connecting: 'Conectando...',
+  connected: 'Sincronizado',
+  offline: 'Offline',
+  reconnecting: 'Reconectando...',
+  syncing: 'Sincronizando...'
+};
+
+const RESOURCE_SYNC_DELAY = 600;
+const scheduledResourceSyncs = new Map();
+
+function scheduleResourceSync(resourceKey, task, delay = RESOURCE_SYNC_DELAY) {
+  if (scheduledResourceSyncs.has(resourceKey)) {
+    clearTimeout(scheduledResourceSyncs.get(resourceKey));
+  }
+
+  const timeoutId = setTimeout(() => {
+    scheduledResourceSyncs.delete(resourceKey);
+    Promise.resolve(task()).catch((error) => {
+      console.error(`Erro ao sincronizar recurso ${resourceKey}`, error);
+    });
+  }, delay);
+
+  scheduledResourceSyncs.set(resourceKey, timeoutId);
+}
+
+function parseEventPayload(event) {
+  if (!event || typeof event.data !== 'string' || event.data.trim() === '') {
+    return null;
+  }
   try {
-    // Recarrega dados da página atual
-    switch (currentPage) {
-      case 'produtos':
-        await carregarProdutos(true);
-        break;
-      case 'orcamentos':
-        await carregarOrcamentos(true);
-        break;
-      case 'usuarios':
-        if (usuarioAtual?.admin) {
-          await carregarUsuarios(true);
-        }
-        break;
-      case 'registros':
-        if (usuarioAtual?.admin) {
-          await carregarRegistros(true);
-        }
-        break;
+    return JSON.parse(event.data);
+  } catch (err) {
+    console.warn('Falha ao interpretar payload do evento SSE', err);
+    return null;
+  }
+}
+
+function updateSyncStatus(state) {
+  if (!syncStatus || !syncStatusText) return;
+  syncStatus.dataset.state = state;
+  syncStatusText.textContent = SYNC_STATUS_TEXT[state] || SYNC_STATUS_TEXT.syncing;
+  syncStatus.setAttribute('aria-live', state === 'offline' ? 'assertive' : 'polite');
+}
+
+let isFullSyncInProgress = false;
+let hasConnectedToEvents = false;
+let eventSourceReconnectTimeout = null;
+
+function startRealtimeSyncLoop() {
+  if (!usuarioAtual || isFullSyncInProgress) {
+    return;
+  }
+  syncAllData();
+}
+
+function stopRealtimeSyncLoop() {}
+
+async function syncAllData({ showToast = false } = {}) {
+  if (!navigator.onLine) {
+    updateSyncStatus('offline');
+    if (showToast) {
+      mostrarToast('Sem conexão para sincronizar os dados.', 'warning');
     }
-    
-    mostrarToast('Dados atualizados com sucesso!', 'success');
+    return;
+  }
+
+  if (!usuarioAtual) {
+    updateSyncStatus('offline');
+    return;
+  }
+
+  if (isFullSyncInProgress) {
+    return;
+  }
+
+  isFullSyncInProgress = true;
+  updateSyncStatus('syncing');
+
+  const tarefas = [
+    carregarProdutos(true),
+    carregarTemplates(true),
+    carregarOrcamentos(true)
+  ];
+
+  if (usuarioAtual?.admin) {
+    tarefas.push(carregarUsuarios());
+    tarefas.push(carregarRegistros());
+  }
+
+  try {
+    const resultados = await Promise.allSettled(tarefas);
+    const houveErro = resultados.some((resultado) => resultado.status === 'rejected');
+
+    if (!houveErro) {
+      renderizarTemplates(templateSelecionadoId);
+      sincronizarProdutosSelecionadosComCache();
+      renderizarProdutosSelecionaveis();
+    }
+
+    if (houveErro) {
+      console.warn('Nem todos os dados foram sincronizados corretamente.', resultados);
+      if (showToast) {
+        mostrarToast('Alguns dados não foram sincronizados.', 'warning');
+      }
+    } else if (showToast) {
+      mostrarToast('Dados sincronizados automaticamente!', 'success');
+    }
   } catch (error) {
-    console.error('Erro ao recarregar dados:', error);
-    mostrarToast('Erro ao atualizar dados', 'error');
+    console.error('Erro ao sincronizar dados automaticamente:', error);
+    if (showToast) {
+      mostrarToast('Erro ao sincronizar dados automaticamente.', 'error');
+    }
+  } finally {
+    isFullSyncInProgress = false;
+    updateSyncStatus(navigator.onLine ? 'connected' : 'offline');
   }
 }
 
@@ -121,15 +208,75 @@ function connectEventSource() {
   if (eventSource) {
     eventSource.close();
   }
+
+  if (!navigator.onLine) {
+    updateSyncStatus('offline');
+    eventSource = null;
+    return;
+  }
+
+  updateSyncStatus('connecting');
+
   eventSource = new EventSource('/api/events');
-  eventSource.addEventListener('produtos-updated', () => carregarProdutos(true));
-  eventSource.addEventListener('orcamentos-updated', () => carregarOrcamentos(true));
-  eventSource.addEventListener('usuarios-updated', () => {
-    if (usuarioAtual?.admin) carregarUsuarios(true);
+
+  eventSource.addEventListener('produtos-updated', () => {
+    scheduleResourceSync('produtos', () => carregarProdutos(true));
   });
+  eventSource.addEventListener('orcamentos-updated', () => {
+    scheduleResourceSync('orcamentos', () => carregarOrcamentos(true));
+  });
+  eventSource.addEventListener('templates-updated', () => {
+    scheduleResourceSync('templates', async () => {
+      await carregarTemplates(true);
+      renderizarTemplates(templateSelecionadoId);
+    });
+  });
+  eventSource.addEventListener('usuarios-updated', (event) => {
+    const payload = parseEventPayload(event);
+    if (usuarioAtual?.admin) {
+      scheduleResourceSync('usuarios', () => carregarUsuarios());
+    }
+    const targetId = payload?.userId;
+    if (targetId && usuarioAtual && usuarioAtual.id === targetId) {
+      scheduleResourceSync('session', () => atualizarSessaoAtual());
+    }
+  });
+  eventSource.addEventListener('registros-updated', () => {
+    if (usuarioAtual?.admin) {
+      scheduleResourceSync('registros', () => carregarRegistros());
+    }
+  });
+  eventSource.addEventListener('data-files-changed', () => {
+    scheduleResourceSync('full-sync', () => syncAllData());
+  });
+  eventSource.addEventListener('connected', () => {
+    updateSyncStatus('connected');
+  });
+
+  eventSource.onopen = async () => {
+    if (eventSourceReconnectTimeout) {
+      clearTimeout(eventSourceReconnectTimeout);
+      eventSourceReconnectTimeout = null;
+    }
+    const reconectando = hasConnectedToEvents;
+    hasConnectedToEvents = true;
+    updateSyncStatus('connected');
+
+    if (reconectando) {
+      await syncAllData();
+    }
+  };
+
   eventSource.onerror = () => {
+    updateSyncStatus(navigator.onLine ? 'reconnecting' : 'offline');
     eventSource.close();
-    setTimeout(connectEventSource, 5000);
+    eventSource = null;
+    if (!eventSourceReconnectTimeout) {
+      eventSourceReconnectTimeout = setTimeout(() => {
+        eventSourceReconnectTimeout = null;
+        connectEventSource();
+      }, 5000);
+    }
   };
 }
 
@@ -140,6 +287,7 @@ let orcamentosCache = [];
 let usuariosCache = [];
 let registrosCache = [];
 let produtosSelecionados = []; // Formato: { id, nome, valorUnitario, quantidade, foto }
+let templateSelecionadoId = null;
 let deferredPrompt = null;
 let isEditing = false; // Indica se há alterações não salvas
 let currentForm = null;
@@ -148,6 +296,14 @@ let currentPage = "home"; // Página atual para controle do histórico
 let usuarioAtual = null; // Dados do usuário logado
 let offlineQueue = [];
 let eventSource = null;
+const resourceFetchPromises = {
+  produtos: null,
+  templates: null,
+  orcamentos: null,
+  usuarios: null,
+  registros: null,
+};
+let sessionRefreshPromise = null;
 
 // Elementos DOM frequentemente acessados
 const appContent = document.getElementById("app-content");
@@ -169,7 +325,12 @@ const confirmOk = document.getElementById("confirm-ok");
 const confirmCancel = document.getElementById("confirm-cancel");
 
 // Elementos do header
-const refreshBtn = document.getElementById("refresh-btn");
+const syncStatus = document.getElementById("sync-status");
+const syncStatusText = syncStatus ? syncStatus.querySelector('.sync-text') : null;
+
+if (syncStatus) {
+  updateSyncStatus(navigator.onLine ? 'connecting' : 'offline');
+}
 
 // Elementos de login
 const loginModal = document.getElementById("login-modal");
@@ -205,6 +366,7 @@ const registrosLista = document.getElementById("registros-lista");
 // Elementos da página de perfil
 const perfilForm = document.getElementById("perfil-form");
 const perfilNome = document.getElementById("perfil-nome");
+const perfilDisplayName = document.getElementById("perfil-display-name");
 const perfilSenha = document.getElementById("perfil-senha");
 const perfilFotoInput = document.getElementById("perfil-foto");
 const perfilFotoPreview = document.getElementById("perfil-foto-preview");
@@ -220,6 +382,8 @@ const usuarioNome = document.getElementById("usuario-nome");
 const usuarioSenha = document.getElementById("usuario-senha");
 const usuarioAdmin = document.getElementById("usuario-admin");
 const usuarioFoto = document.getElementById("usuario-foto");
+const usuarioDisplayName = document.getElementById("usuario-display-name");
+const usuarioTemplatesContainer = document.getElementById("usuario-templates");
 
 // Elementos do modal de produto
 const produtoModal = document.getElementById("produto-modal");
@@ -241,13 +405,21 @@ function atualizarDisponibilidadeOnline() {
   }
 }
 
-window.addEventListener('online', () => {
+window.addEventListener('online', async () => {
   atualizarDisponibilidadeOnline();
-  processarFilaOffline();
+  updateSyncStatus('connecting');
   mostrarToast('Conectado');
+  connectEventSource();
+  await processarFilaOffline();
 });
+
 window.addEventListener('offline', () => {
   atualizarDisponibilidadeOnline();
+  updateSyncStatus('offline');
+  if (eventSource) {
+    eventSource.close();
+    eventSource = null;
+  }
   mostrarToast('Você está offline');
 });
 
@@ -448,6 +620,80 @@ function configurarMenuAdmin() {
   });
 }
 
+async function atualizarSessaoAtual({ forceFullSync = true } = {}) {
+  if (sessionRefreshPromise) {
+    return sessionRefreshPromise;
+  }
+
+  const previousSnapshot = usuarioAtual
+    ? JSON.stringify({
+        id: usuarioAtual.id || null,
+        usuario: usuarioAtual.usuario || '',
+        admin: !!usuarioAtual.admin,
+        displayName: usuarioAtual.displayName || '',
+        allowedTemplates: Array.isArray(usuarioAtual.allowedTemplates)
+          ? [...usuarioAtual.allowedTemplates].sort()
+          : [],
+      })
+    : null;
+
+  sessionRefreshPromise = (async () => {
+    try {
+      const res = await fetch('/api/session');
+      if (!res.ok) {
+        throw new Error(`Falha ao atualizar sessão: ${res.status}`);
+      }
+      const data = await res.json();
+      if (!data.autenticado) {
+        if (eventSource) {
+          eventSource.close();
+          eventSource = null;
+        }
+        hasConnectedToEvents = false;
+        updateSyncStatus('offline');
+        usuarioAtual = null;
+        localStorage.removeItem('usuarioAtual');
+        stopRealtimeSyncLoop();
+        configurarMenuAdmin();
+        loginModal?.classList.add('active');
+        mostrarToast('Sua sessão foi finalizada. Faça login novamente.', 'warning');
+        return false;
+      }
+
+      usuarioAtual = data.usuario;
+      localStorage.setItem('usuarioAtual', JSON.stringify(usuarioAtual));
+      configurarMenuAdmin();
+
+      const nextSnapshot = JSON.stringify({
+        id: usuarioAtual.id || null,
+        usuario: usuarioAtual.usuario || '',
+        admin: !!usuarioAtual.admin,
+        displayName: usuarioAtual.displayName || '',
+        allowedTemplates: Array.isArray(usuarioAtual.allowedTemplates)
+          ? [...usuarioAtual.allowedTemplates].sort()
+          : [],
+      });
+
+      if (forceFullSync && previousSnapshot !== nextSnapshot) {
+        await syncAllData();
+      }
+
+      if (currentPage === 'perfil') {
+        await carregarPerfil();
+      }
+
+      return true;
+    } catch (err) {
+      console.error('Erro ao atualizar sessão', err);
+      return false;
+    } finally {
+      sessionRefreshPromise = null;
+    }
+  })();
+
+  return sessionRefreshPromise;
+}
+
 async function verificarSessao() {
   try {
     const res = await fetch('/api/session');
@@ -460,7 +706,13 @@ async function verificarSessao() {
       loginModal.classList.remove('active');
     } else {
       localStorage.removeItem('usuarioAtual');
-      if (eventSource) { eventSource.close(); eventSource = null; }
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      hasConnectedToEvents = false;
+      updateSyncStatus('offline');
+      stopRealtimeSyncLoop();
       loginModal.classList.add('active');
       if (loginForm) {
         loginForm.addEventListener('submit', async (e) => {
@@ -478,7 +730,13 @@ async function verificarSessao() {
       loginModal.classList.remove('active');
     } else {
       console.error('Falha ao verificar sessão', e);
-      if (eventSource) { eventSource.close(); eventSource = null; }
+      if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+      }
+      hasConnectedToEvents = false;
+      updateSyncStatus('offline');
+      stopRealtimeSyncLoop();
       loginModal.classList.add('active');
     }
   }
@@ -519,6 +777,7 @@ function iniciarAplicacao() {
   initPerfilPage();
   carregarDadosIniciais();
   connectEventSource();
+  startRealtimeSyncLoop();
   initInstallPrompt();
   if ("Notification" in window && Notification.permission === "default") {
     Notification.requestPermission();
@@ -539,6 +798,12 @@ document.addEventListener("DOMContentLoaded", () => {
     processarFilaOffline();
   }
   verificarSessao();
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && usuarioAtual) {
+    syncAllData();
+  }
 });
 
 window.addEventListener("popstate", async (e) => {
@@ -580,21 +845,6 @@ function initNavigation() {
   });
   menuClose.addEventListener("click", fecharMenu);
   overlay.addEventListener("click", fecharMenu);
-  
-  // Event listener para botão de atualização
-  if (refreshBtn) {
-    refreshBtn.addEventListener("click", async () => {
-      refreshBtn.disabled = true;
-      refreshBtn.querySelector('.material-icons').style.animation = 'spin 1s linear infinite';
-      
-      try {
-        await forceReloadData();
-      } finally {
-        refreshBtn.disabled = false;
-        refreshBtn.querySelector('.material-icons').style.animation = '';
-      }
-    });
-  }
   
   menuItems.forEach((item) => {
     item.addEventListener("click", async (e) => {
@@ -760,6 +1010,7 @@ function initPerfilPage() {
     try {
       const formData = new FormData();
       formData.append('usuario', perfilNome.value);
+      formData.append('displayName', perfilDisplayName.value);
       if (perfilSenha.value) formData.append('senha', perfilSenha.value);
       if (perfilFotoInput.files && perfilFotoInput.files[0]) {
         formData.append('foto', perfilFotoInput.files[0]);
@@ -768,6 +1019,7 @@ function initPerfilPage() {
       if (!res.ok) throw new Error('Falha ao salvar perfil');
       const user = await res.json();
       usuarioAtual = { ...usuarioAtual, ...user };
+      localStorage.setItem('usuarioAtual', JSON.stringify(usuarioAtual));
       mostrarToast('Perfil atualizado');
     } catch (err) {
       console.error(err);
@@ -782,8 +1034,11 @@ function initPerfilPage() {
       eventSource.close();
       eventSource = null;
     }
+    hasConnectedToEvents = false;
+    updateSyncStatus('offline');
     usuarioAtual = null;
     localStorage.removeItem('usuarioAtual');
+    stopRealtimeSyncLoop();
     loginModal.classList.add('active');
   });
   carregarPerfil();
@@ -816,7 +1071,12 @@ function initProdutoModal() {
   produtoForm.addEventListener("submit", async (e) => {
     e.preventDefault();
     if (!navigator.onLine) {
-      const dados = { nome: produtoNome.value, descricao: produtoDescricao.value, valor: produtoValor.value };
+      const valorDigitado = parseFloat((produtoValor.value || '0').toString().replace(',', '.'));
+      const dados = {
+        nome: produtoNome.value,
+        descricao: produtoDescricao.value,
+        valor: Number.isFinite(valorDigitado) ? valorDigitado : 0,
+      };
       if (produtoFotoInput.files && produtoFotoInput.files[0]) {
         const reader = new FileReader();
         reader.onload = () => {
@@ -826,6 +1086,8 @@ function initProdutoModal() {
           const tempId = 'off-' + Date.now();
           produtosCache.push({ id: tempId, ...dados });
           renderizarProdutos();
+          sincronizarProdutosSelecionadosComCache();
+          renderizarProdutosSelecionaveis();
           produtoModal.classList.remove("active");
           mostrarToast('Produto salvo offline');
         };
@@ -836,6 +1098,8 @@ function initProdutoModal() {
         const tempId = 'off-' + Date.now();
         produtosCache.push({ id: tempId, ...dados });
         renderizarProdutos();
+        sincronizarProdutosSelecionadosComCache();
+        renderizarProdutosSelecionaveis();
         produtoModal.classList.remove("active");
         mostrarToast('Produto salvo offline');
       }
@@ -863,7 +1127,42 @@ function initProdutoModal() {
         throw new Error(errorData.erro || `Erro ${response.status} ao salvar produto`);
       }
 
-      await carregarProdutos(); // Recarrega a lista para refletir a mudança
+      const produtoSalvo = await response.json();
+      const valorDigitado = parseFloat((produtoValor.value || '0').toString().replace(',', '.'));
+      const valorNormalizado = typeof produtoSalvo.valor === 'number'
+        ? produtoSalvo.valor
+        : (Number.isFinite(valorDigitado)
+          ? valorDigitado
+          : (produtoId.value ? produtosCache.find((p) => p.id === produtoId.value)?.valor || 0 : 0));
+      const fotoAtual = (produtoFotoInput.files && produtoFotoInput.files[0])
+        ? fotoPreview.src
+        : (produtoSalvo.id ? produtosCache.find((p) => p.id === produtoSalvo.id)?.foto || null : null);
+
+      if (produtoId.value) {
+        const indiceExistente = produtosCache.findIndex((p) => p.id === produtoId.value);
+        if (indiceExistente !== -1) {
+          produtosCache[indiceExistente] = {
+            ...produtosCache[indiceExistente],
+            ...produtoSalvo,
+            valor: valorNormalizado,
+            foto: fotoAtual || produtosCache[indiceExistente].foto || null,
+          };
+        }
+      } else {
+        const novoProduto = {
+          ...produtoSalvo,
+          valor: valorNormalizado,
+          foto: fotoAtual || null,
+        };
+        produtosCache = produtosCache.filter((p) => p.id !== novoProduto.id);
+        produtosCache.push(novoProduto);
+      }
+
+      renderizarProdutos();
+      sincronizarProdutosSelecionadosComCache();
+      renderizarProdutosSelecionaveis();
+
+      await carregarProdutos(true); // Garante dados sincronizados com o servidor
       produtoModal.classList.remove("active");
       isEditing = false;
       currentForm = null;
@@ -938,9 +1237,9 @@ function initOrcamentoModal() {
         mostrarToast('Preencha todos os dados obrigatórios');
         return;
       }
-      const templateSelecionado = document.querySelector(".template-item.selected");
-      if (!templateSelecionado) {
-        mostrarToast("Selecione um template");
+      if (!templateSelecionadoId) {
+        mostrarToast("Selecione um template disponível");
+        ativarTab("template");
         return;
       }
       if (valorDescontoInput.required && !valorDescontoInput.value) {
@@ -954,7 +1253,7 @@ function initOrcamentoModal() {
         telefoneCliente: clienteTelefone.value,
         emailCliente: clienteEmail.value,
         cpfCliente: clienteCpf.value,
-        templateId: templateSelecionado.getAttribute("data-id"),
+        templateId: templateSelecionadoId,
         produtos: produtosSelecionados.map(p => ({ id: p.id, quantidade: p.quantidade })),
         observacoes: orcamentoObservacoes.value,
         tipoDesconto: tipoDescontoSelect.value === "nenhum" ? null : tipoDescontoSelect.value,
@@ -997,8 +1296,7 @@ function initOrcamentoModal() {
       ativarTab("produtos");
       return;
     }
-    const templateSelecionado = document.querySelector(".template-item.selected");
-    if (!templateSelecionado) {
+    if (!templateSelecionadoId) {
       mostrarToast("Selecione um template");
       ativarTab("template");
       return;
@@ -1018,7 +1316,7 @@ function initOrcamentoModal() {
         telefoneCliente: clienteTelefone.value,
         emailCliente: clienteEmail.value,
         cpfCliente: clienteCpf.value,
-        templateId: templateSelecionado.getAttribute("data-id"),
+        templateId: templateSelecionadoId,
         produtos: produtosSelecionados.map((p) => ({ id: p.id, quantidade: p.quantidade })),
         observacoes: orcamentoObservacoes.value,
         tipoDesconto: tipoDescontoSelect.value === "nenhum" ? null : tipoDescontoSelect.value,
@@ -1124,9 +1422,14 @@ async function carregarProdutos(forceReload = false) {
     renderizarProdutos();
     return;
   }
-  
-  // Mostra skeleton loading
-  if (produtosLista) {
+
+  if (resourceFetchPromises.produtos) {
+    await resourceFetchPromises.produtos;
+    renderizarProdutos();
+    return;
+  }
+
+  if (produtosLista && produtosCache.length === 0) {
     produtosLista.innerHTML = Array.from({ length: 3 })
       .map(() => `
         <div class="item-card">
@@ -1139,34 +1442,63 @@ async function carregarProdutos(forceReload = false) {
       `)
       .join("");
   }
-  
+
+  const fetchPromise = (async () => {
+    try {
+      const response = await fetchWithNoCache("/api/produtos");
+      if (!response.ok) throw new Error("Erro ao buscar produtos");
+      produtosCache = await response.json();
+    } catch (error) {
+      console.error("Erro ao carregar produtos:", error);
+      mostrarToast("Erro ao carregar produtos.", "error");
+      produtosCache = [];
+    }
+  })();
+
+  resourceFetchPromises.produtos = fetchPromise;
+
   try {
-    const response = await fetchWithNoCache("/api/produtos");
-    if (!response.ok) throw new Error("Erro ao buscar produtos");
-    produtosCache = await response.json();
-    renderizarProdutos();
-  } catch (error) {
-    console.error("Erro ao carregar produtos:", error);
-    mostrarToast("Erro ao carregar produtos.", "error");
-    produtosCache = []; // Limpa cache em caso de erro
-    renderizarProdutos(); // Renderiza estado vazio
+    await fetchPromise;
+  } finally {
+    resourceFetchPromises.produtos = null;
   }
+
+  renderizarProdutos();
+  sincronizarProdutosSelecionadosComCache();
+  renderizarProdutosSelecionaveis();
 }
 
 async function carregarTemplates(forceReload = false) {
   if (templatesCache.length > 0 && !forceReload) {
     return;
   }
-  
-  try {
-    const response = await fetchWithNoCache("/api/templates");
-    if (!response.ok) throw new Error("Erro ao buscar templates");
-    templatesCache = await response.json();
-  } catch (error) {
-    console.error("Erro ao carregar templates:", error);
-    mostrarToast("Erro ao carregar templates.", "error");
-    templatesCache = [];
+
+  if (resourceFetchPromises.templates) {
+    await resourceFetchPromises.templates;
+    return;
   }
+
+  const fetchPromise = (async () => {
+    try {
+      const response = await fetchWithNoCache("/api/templates");
+      if (!response.ok) throw new Error("Erro ao buscar templates");
+      templatesCache = await response.json();
+    } catch (error) {
+      console.error("Erro ao carregar templates:", error);
+      mostrarToast("Erro ao carregar templates.", "error");
+      templatesCache = [];
+    }
+  })();
+
+  resourceFetchPromises.templates = fetchPromise;
+
+  try {
+    await fetchPromise;
+  } finally {
+    resourceFetchPromises.templates = null;
+  }
+
+  return templatesCache;
 }
 
 async function carregarOrcamentos(forceReload = false) {
@@ -1174,9 +1506,14 @@ async function carregarOrcamentos(forceReload = false) {
     renderizarOrcamentos();
     return;
   }
-  
-  // Mostra skeleton loading
-  if (orcamentosLista) {
+
+  if (resourceFetchPromises.orcamentos) {
+    await resourceFetchPromises.orcamentos;
+    renderizarOrcamentos();
+    return;
+  }
+
+  if (orcamentosLista && orcamentosCache.length === 0) {
     orcamentosLista.innerHTML = Array.from({ length: 3 })
       .map(() => `
         <div class="item-card">
@@ -1188,21 +1525,31 @@ async function carregarOrcamentos(forceReload = false) {
       `)
       .join("");
   }
-  
-  try {
-    const response = await fetchWithNoCache("/api/orcamentos");
-    if (response.ok) {
-      orcamentosCache = await response.json();
-    } else {
-      console.warn('Não foi possível obter orçamentos:', response.status);
+
+  const fetchPromise = (async () => {
+    try {
+      const response = await fetchWithNoCache("/api/orcamentos");
+      if (response.ok) {
+        orcamentosCache = await response.json();
+      } else {
+        console.warn('Não foi possível obter orçamentos:', response.status);
+        orcamentosCache = [];
+      }
+    } catch (error) {
+      console.error('Falha ao carregar orçamentos', error);
       orcamentosCache = [];
     }
-    renderizarOrcamentos();
-  } catch (error) {
-    console.error('Falha ao carregar orçamentos', error);
-    orcamentosCache = [];
-    renderizarOrcamentos();
+  })();
+
+  resourceFetchPromises.orcamentos = fetchPromise;
+
+  try {
+    await fetchPromise;
+  } finally {
+    resourceFetchPromises.orcamentos = null;
   }
+
+  renderizarOrcamentos();
 }
 
 // --- Funções de Renderização --- //
@@ -1337,26 +1684,123 @@ function renderizarOrcamentos() {
   });
 }
 
-function renderizarTemplates() {
+function obterTemplatesPermitidosParaUsuario(usuario = usuarioAtual) {
+  if (!usuario || !Array.isArray(usuario.allowedTemplates)) {
+    return templatesCache.map((t) => t.id);
+  }
+  return usuario.allowedTemplates;
+}
+
+function renderizarTemplates(selectedTemplateId = null) {
   if (!templatesLista) return;
   if (templatesCache.length === 0) {
-    templatesLista.innerHTML = `<div class="empty-state"><p>Nenhum template disponível</p></div>`;
+    templatesLista.innerHTML = `
+      <div class="empty-state">
+        <span class="material-icons">hourglass_empty</span>
+        <p>Nenhum template disponível no momento.</p>
+      </div>`;
+    templateSelecionadoId = null;
     return;
   }
-  templatesLista.innerHTML = templatesCache
+
+  const permitidos = obterTemplatesPermitidosParaUsuario();
+  const possuiRestricao = Array.isArray(usuarioAtual?.allowedTemplates);
+  let templatesParaRenderizar = possuiRestricao
+    ? templatesCache.filter((t) => permitidos.includes(t.id))
+    : [...templatesCache];
+
+  const alvoSelecionado = selectedTemplateId || templateSelecionadoId;
+  if (
+    alvoSelecionado &&
+    !templatesParaRenderizar.some((t) => t.id === alvoSelecionado)
+  ) {
+    const existente = templatesCache.find((t) => t.id === alvoSelecionado);
+    if (existente) {
+      templatesParaRenderizar = [
+        ...templatesParaRenderizar,
+        { ...existente, restricted: true },
+      ];
+    }
+  }
+
+  if (templatesParaRenderizar.length === 0) {
+    templatesLista.innerHTML = `
+      <div class="empty-state">
+        <span class="material-icons">block</span>
+        <p>Seu usuário não possui templates liberados.</p>
+        <p>Solicite ao administrador a liberação de modelos.</p>
+      </div>`;
+    templateSelecionadoId = null;
+    return;
+  }
+
+  templatesLista.innerHTML = templatesParaRenderizar
     .map((template) => `
-      <div class="template-item" data-id="${template.id}">
+      <div class="template-item ${template.restricted ? 'restricted' : ''}" data-id="${template.id}" ${template.restricted ? 'data-restricted="true" aria-disabled="true"' : ''}>
         <span class="material-icons">description</span>
-        <span>${template.nome}</span>
+        <span>${escaparHtml(template.nome)}</span>
+        ${template.restricted ? '<small>Modelo não disponível para o seu usuário</small>' : ''}
       </div>
     `)
     .join("");
-  templatesLista.querySelectorAll(".template-item").forEach((item) => {
+
+  const itens = templatesLista.querySelectorAll(".template-item");
+  itens.forEach((item) => {
+    if (item.dataset.restricted === "true") {
+      item.addEventListener("click", () => {
+        mostrarToast("Este template não está liberado para o seu usuário.");
+      });
+      return;
+    }
     item.addEventListener("click", () => {
-      templatesLista.querySelectorAll(".template-item").forEach((i) => i.classList.remove("selected"));
+      itens.forEach((i) => i.classList.remove("selected"));
       item.classList.add("selected");
+      templateSelecionadoId = item.getAttribute("data-id");
     });
   });
+
+  let itemParaSelecionar = null;
+  if (alvoSelecionado) {
+    itemParaSelecionar = templatesLista.querySelector(`.template-item[data-id="${alvoSelecionado}"]`);
+  }
+  if (!itemParaSelecionar) {
+    itemParaSelecionar = templatesLista.querySelector('.template-item:not([data-restricted="true"])');
+  }
+  if (itemParaSelecionar) {
+    itemParaSelecionar.classList.add('selected');
+    if (itemParaSelecionar.dataset.restricted === 'true') {
+      templateSelecionadoId = null;
+    } else {
+      templateSelecionadoId = itemParaSelecionar.getAttribute('data-id');
+    }
+  } else {
+    templateSelecionadoId = null;
+  }
+}
+
+function preencherPermissoesTemplatesUsuario(selecionados = null) {
+  if (!usuarioTemplatesContainer) return;
+  if (templatesCache.length === 0) {
+    usuarioTemplatesContainer.innerHTML = `
+      <p class="helper-text">Cadastre modelos de orçamento para distribuí-los aos usuários.</p>`;
+    return;
+  }
+
+  const selecionadosSet = Array.isArray(selecionados)
+    ? new Set(selecionados)
+    : null;
+
+  usuarioTemplatesContainer.innerHTML = templatesCache
+    .map((template) => {
+      const marcado = !selecionadosSet || selecionadosSet.has(template.id);
+      return `
+        <label class="template-permission">
+          <input type="checkbox" value="${template.id}" ${marcado ? 'checked' : ''}>
+          <span>${escaparHtml(template.nome)}</span>
+        </label>
+      `;
+    })
+    .join('');
 }
 
 function renderizarProdutosSelecionaveis() {
@@ -1420,28 +1864,62 @@ function renderizarProdutosSelecionadosNoForm() {
 
   produtosSelecionadosEl.innerHTML = produtosSelecionados
     .map((produto) => {
-        const imgSrc = produto.foto ? produto.foto : "/images/placeholder.png";
-        return `
-          <div class="selected-item" data-id="${produto.id}">
-            <img src="${imgSrc}" alt="${produto.nome}" class="item-image-small" loading="lazy">
-            <div class="item-details">
-              <span>${produto.nome} (Qtd: ${produto.quantidade})</span>
-            </div>
-            <button class="btn-icon remove-produto-selecionado" aria-label="Remover">
-              <span class="material-icons">close</span>
-            </button>
+      const imgSrc = produto.foto ? produto.foto : "/images/placeholder.png";
+      return `
+        <div class="selected-item" data-id="${produto.id}">
+          <img src="${imgSrc}" alt="${produto.nome}" class="item-image-small" loading="lazy">
+          <div class="item-details">
+            <span class="selected-item-name">${produto.nome}</span>
+            <span class="selected-item-price">${formatarMoeda(produto.valorUnitario)} • Quantidade: ${produto.quantidade}</span>
           </div>
-        `;
+          <button class="btn-icon remove-produto-selecionado" aria-label="Remover">
+            <span class="material-icons">close</span>
+          </button>
+        </div>
+      `;
     })
     .join("");
 
   produtosSelecionadosEl.querySelectorAll(".remove-produto-selecionado").forEach((btn) => {
-      btn.addEventListener("click", (e) => {
-        const produtoId = e.target.closest(".selected-item").getAttribute("data-id");
-        atualizarQuantidadeProdutoSelecionado(produtoId, 0); // Remove ao setar qtd para 0
-        renderizarProdutosSelecionadosNoForm(); // Re-renderiza a lista no form
-      });
+    btn.addEventListener("click", (e) => {
+      const produtoId = e.target.closest(".selected-item").getAttribute("data-id");
+      atualizarQuantidadeProdutoSelecionado(produtoId, 0);
+      renderizarProdutosSelecionadosNoForm();
     });
+  });
+}
+
+function sincronizarProdutosSelecionadosComCache() {
+  if (!Array.isArray(produtosSelecionados) || produtosSelecionados.length === 0) {
+    return;
+  }
+
+  const removidos = [];
+  const atualizados = produtosSelecionados
+    .map((selecionado) => {
+      const produtoAtual = produtosCache.find((produto) => produto.id === selecionado.id);
+      if (!produtoAtual) {
+        removidos.push(selecionado);
+        return null;
+      }
+      return {
+        ...selecionado,
+        nome: produtoAtual.nome,
+        valorUnitario: produtoAtual.valor,
+        foto: produtoAtual.foto || selecionado.foto || null,
+      };
+    })
+    .filter(Boolean);
+
+  if (
+    removidos.length > 0 &&
+    removidos.some((item) => !String(item.id || '').startsWith('off-'))
+  ) {
+    mostrarToast('Alguns produtos foram removidos e não estão mais disponíveis.', 'warning');
+  }
+
+  produtosSelecionados = atualizados;
+  renderizarProdutosSelecionadosNoForm();
 }
 
 // --- Funções de Abertura de Modais --- //
@@ -1491,10 +1969,12 @@ async function abrirModalProduto(id = null) {
   setCurrentForm(produtoForm);
 }
 
-function abrirModalOrcamento() {
+async function abrirModalOrcamento() {
   orcamentoForm.reset();
   produtosSelecionados = [];
   renderizarProdutosSelecionadosNoForm();
+  templateSelecionadoId = null;
+  await carregarTemplates();
   renderizarTemplates();
   ativarTab("cliente");
   tipoDescontoSelect.value = "nenhum";
@@ -1566,10 +2046,8 @@ async function abrirModalEditarOrcamento(id) {
     }));
     renderizarProdutosSelecionadosNoForm();
     await carregarTemplates();
-    renderizarTemplates();
-    templatesLista.querySelectorAll(".template-item").forEach(item => {
-      item.classList.toggle("selected", item.getAttribute("data-id") === orc.templateId);
-    });
+    templateSelecionadoId = orc.templateId;
+    renderizarTemplates(templateSelecionadoId);
     orcamentoModal.classList.add("active");
     setCurrentForm(orcamentoForm);
     validarClienteNome(false);
@@ -1631,7 +2109,15 @@ async function excluirProduto(id) {
     if (!response.ok) {
       throw new Error("Erro ao excluir produto");
     }
-    await carregarProdutos();
+    produtosCache = produtosCache.filter((produto) => produto.id !== id);
+    const quantidadeSelecionadosAntes = produtosSelecionados.length;
+    produtosSelecionados = produtosSelecionados.filter((produto) => produto.id !== id);
+    renderizarProdutos();
+    renderizarProdutosSelecionaveis();
+    if (produtosSelecionados.length !== quantidadeSelecionadosAntes) {
+      renderizarProdutosSelecionadosNoForm();
+    }
+    await carregarProdutos(true);
     mostrarToast("Produto excluído com sucesso!");
   } catch (error) {
     console.error("Erro ao excluir produto:", error);
@@ -1878,6 +2364,16 @@ async function gerarPdfOffline(id, acao) {
 
 // --- Funções Utilitárias --- //
 
+function escaparHtml(valor) {
+  if (valor === null || valor === undefined) return '';
+  return String(valor)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 function formatarMoeda(valor) {
   const numValor = Number(valor);
   if (isNaN(numValor)) return "R$ 0,00";
@@ -1888,6 +2384,18 @@ function formatarData(dataString) {
   if (!dataString) return "";
   const data = new Date(dataString);
   return data.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
+}
+
+function formatarDataHora(dataString) {
+  if (!dataString) return "";
+  const data = new Date(dataString);
+  return data.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function mostrarToast(mensagem) {
@@ -1963,6 +2471,7 @@ async function processarFilaOffline() {
   const fila = [...offlineQueue];
   offlineQueue = [];
   salvarFilaOffline();
+  const recursosParaAtualizar = new Set();
   for (const acao of fila) {
     try {
       if (acao.tipo === 'addProduto') {
@@ -1976,6 +2485,7 @@ async function processarFilaOffline() {
         }
         const res = await fetch('/api/produtos', { method: 'POST', body: fd });
         if (!res.ok) throw new Error('Falha ao enviar produto');
+        recursosParaAtualizar.add('produtos');
       } else if (acao.tipo === 'addOrcamento') {
         const res = await fetch('/api/orcamentos', {
           method: 'POST',
@@ -1983,6 +2493,10 @@ async function processarFilaOffline() {
           body: JSON.stringify(acao.dados),
         });
         if (!res.ok) throw new Error('Falha ao enviar orçamento');
+        recursosParaAtualizar.add('orcamentos');
+      } else {
+        recursosParaAtualizar.clear();
+        break;
       }
     } catch (err) {
       console.error('Erro ao sincronizar ação offline', err);
@@ -1992,7 +2506,27 @@ async function processarFilaOffline() {
   salvarFilaOffline();
   if (offlineQueue.length === 0) {
     mostrarToast('Sincronização concluída');
-    await carregarDadosIniciais();
+    if (recursosParaAtualizar.size === 0) {
+      await syncAllData();
+    } else {
+      const atualizacoes = [];
+      if (recursosParaAtualizar.has('produtos')) {
+        atualizacoes.push(carregarProdutos(true));
+      }
+      if (recursosParaAtualizar.has('orcamentos')) {
+        atualizacoes.push(carregarOrcamentos(true));
+      }
+      if (usuarioAtual?.admin && recursosParaAtualizar.has('usuarios')) {
+        atualizacoes.push(carregarUsuarios());
+      }
+      if (usuarioAtual?.admin && recursosParaAtualizar.has('registros')) {
+        atualizacoes.push(carregarRegistros());
+      }
+
+      if (atualizacoes.length > 0) {
+        await Promise.all(atualizacoes);
+      }
+    }
   } else {
     mostrarToast('Algumas ações não foram sincronizadas');
   }
@@ -2023,18 +2557,35 @@ function mostrarConfirmacao(mensagem) {
 
 // --- Usuários (Admin) --- //
 async function carregarUsuarios() {
-  try {
-    const res = await fetch('/api/usuarios');
-    if (res.ok) {
-      usuariosCache = await res.json();
-    } else {
-      console.warn('Não foi possível obter usuários:', res.status);
+  if (resourceFetchPromises.usuarios) {
+    await resourceFetchPromises.usuarios;
+    renderizarUsuarios();
+    return;
+  }
+
+  const fetchPromise = (async () => {
+    try {
+      const res = await fetch('/api/usuarios');
+      if (res.ok) {
+        usuariosCache = await res.json();
+      } else {
+        console.warn('Não foi possível obter usuários:', res.status);
+        usuariosCache = [];
+      }
+    } catch (err) {
+      console.error('Falha ao carregar usuários', err);
       usuariosCache = [];
     }
-  } catch (err) {
-    console.error('Falha ao carregar usuários', err);
-    usuariosCache = [];
+  })();
+
+  resourceFetchPromises.usuarios = fetchPromise;
+
+  try {
+    await fetchPromise;
+  } finally {
+    resourceFetchPromises.usuarios = null;
   }
+
   renderizarUsuarios();
 }
 
@@ -2044,14 +2595,29 @@ function renderizarUsuarios() {
     usuariosLista.innerHTML = '<p>Nenhum usuário cadastrado</p>';
     return;
   }
-  usuariosLista.innerHTML = usuariosCache.map(u => `
-    <div class="item-card" data-id="${u.id}">
-      <div class="item-details">
-        <div class="item-title">${u.usuario}</div>
-        <div class="item-subtitle">${u.admin ? 'Admin' : 'Usuário'}</div>
+  usuariosLista.innerHTML = usuariosCache.map(u => {
+    const papel = u.admin ? 'Administrador' : 'Usuário';
+    const nomeComercial = escaparHtml(u.displayName || u.usuario);
+    const login = escaparHtml(u.usuario);
+    let infoTemplates = 'Todos os templates';
+    if (Array.isArray(u.allowedTemplates)) {
+      if (u.allowedTemplates.length === 0) {
+        infoTemplates = 'Sem templates liberados';
+      } else {
+        const qtd = u.allowedTemplates.length;
+        infoTemplates = `${qtd} template${qtd > 1 ? 's' : ''}`;
+      }
+    }
+    return `
+      <div class="item-card" data-id="${u.id}">
+        <div class="item-details">
+          <div class="item-title">${nomeComercial}</div>
+          <div class="item-subtitle">${login} • ${papel}</div>
+          <div class="item-meta">Templates: ${infoTemplates}</div>
+        </div>
       </div>
-    </div>
-  `).join('');
+    `;
+  }).join('');
 
   usuariosLista.querySelectorAll('.item-card').forEach(card => {
     card.addEventListener('click', () => {
@@ -2062,21 +2628,22 @@ function renderizarUsuarios() {
   });
 }
 
-function abrirModalUsuario(usuario = null) {
+async function abrirModalUsuario(usuario = null) {
   usuarioForm.reset();
-  if (usuario) {
-    usuarioId.value = usuario.id;
-    usuarioNome.value = usuario.usuario;
-    usuarioAdmin.checked = !!usuario.admin;
-    usuarioFoto.value = '';
-    if (usuario.foto) {
-      // not previewed but inform file cannot be set programmatically
-    }
-    usuarioModalTitle.textContent = 'Editar Usuário';
-  } else {
-    usuarioId.value = '';
-    usuarioModalTitle.textContent = 'Novo Usuário';
+  usuarioId.value = usuario?.id || '';
+  usuarioNome.value = usuario?.usuario || '';
+  usuarioDisplayName.value = usuario?.displayName || usuario?.usuario || '';
+  usuarioAdmin.checked = !!(usuario && usuario.admin);
+  usuarioSenha.value = '';
+  usuarioSenha.required = !usuario;
+  if (usuarioFoto) usuarioFoto.value = '';
+  if (usuarioTemplatesContainer) {
+    usuarioTemplatesContainer.innerHTML = '<p class="helper-text">Carregando templates...</p>';
   }
+  await carregarTemplates();
+  const selecionados = Array.isArray(usuario?.allowedTemplates) ? usuario.allowedTemplates : null;
+  preencherPermissoesTemplatesUsuario(selecionados);
+  usuarioModalTitle.textContent = usuario ? 'Editar Usuário' : 'Novo Usuário';
   usuarioModal.classList.add('active');
   setCurrentForm(usuarioForm);
 }
@@ -2089,8 +2656,18 @@ usuarioForm?.addEventListener('submit', async (e) => {
   try {
     const formData = new FormData();
     formData.append('usuario', usuarioNome.value);
-    formData.append('senha', usuarioSenha.value);
+    if (usuarioSenha.value || !usuarioId.value) {
+      formData.append('senha', usuarioSenha.value);
+    }
     formData.append('admin', usuarioAdmin.checked);
+    formData.append('displayName', usuarioDisplayName.value);
+    const checkboxes = usuarioTemplatesContainer
+      ? Array.from(usuarioTemplatesContainer.querySelectorAll('input[type="checkbox"]'))
+      : [];
+    const selecionados = checkboxes
+      .filter((input) => input.checked)
+      .map((input) => input.value);
+    formData.append('allowedTemplates', JSON.stringify(selecionados));
     if (usuarioFoto.files && usuarioFoto.files[0]) {
       formData.append('foto', usuarioFoto.files[0]);
     }
@@ -2098,10 +2675,16 @@ usuarioForm?.addEventListener('submit', async (e) => {
     const url = usuarioId.value ? `/api/usuarios/${usuarioId.value}` : '/api/usuarios';
     const res = await fetch(url, { method, body: formData });
     if (!res.ok) throw new Error('Falha ao salvar usuário');
+    const salvo = await res.json();
     usuarioModal.classList.remove('active');
     isEditing = false;
     currentForm = null;
     await carregarUsuarios();
+    if (salvo && usuarioAtual && salvo.id === usuarioAtual.id) {
+      usuarioAtual = { ...usuarioAtual, ...salvo };
+      localStorage.setItem('usuarioAtual', JSON.stringify(usuarioAtual));
+      configurarMenuAdmin();
+    }
     mostrarToast('Usuário salvo');
   } catch (err) {
     console.error(err);
@@ -2115,18 +2698,40 @@ document.querySelectorAll('#usuario-modal .modal-close, #usuario-modal .modal-ca
 
 // --- Registros (Admin) --- //
 async function carregarRegistros() {
-  try {
-    const res = await fetch('/api/logs');
-    if (res.ok) {
-      registrosCache = await res.json();
-    } else {
-      console.warn('Não foi possível obter registros:', res.status);
+  if (resourceFetchPromises.registros) {
+    await resourceFetchPromises.registros;
+    renderizarRegistros();
+    return;
+  }
+
+  const fetchPromise = (async () => {
+    try {
+      const res = await fetch('/api/logs');
+      if (res.ok) {
+        const payload = await res.json();
+        if (Array.isArray(payload)) {
+          registrosCache = [...payload].sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+        } else {
+          registrosCache = [];
+        }
+      } else {
+        console.warn('Não foi possível obter registros:', res.status);
+        registrosCache = [];
+      }
+    } catch (err) {
+      console.error('Falha ao carregar registros', err);
       registrosCache = [];
     }
-  } catch (err) {
-    console.error('Falha ao carregar registros', err);
-    registrosCache = [];
+  })();
+
+  resourceFetchPromises.registros = fetchPromise;
+
+  try {
+    await fetchPromise;
+  } finally {
+    resourceFetchPromises.registros = null;
   }
+
   renderizarRegistros();
 }
 
@@ -2136,14 +2741,19 @@ function renderizarRegistros() {
     registrosLista.innerHTML = '<p>Nenhum registro disponível</p>';
     return;
   }
-  registrosLista.innerHTML = registrosCache.map(l => `
-    <div class="item-card">
-      <div class="item-details">
-        <div class="item-title">${l.descricao}</div>
-        <div class="item-subtitle">${formatarData(l.timestamp)} - ${l.usuario}</div>
-      </div>
-    </div>
-  `).join('');
+  registrosLista.innerHTML = `
+    <div class="logs-list">
+      ${registrosCache.map(l => `
+        <div class="log-row">
+          <div class="log-main">${escaparHtml(l.descricao)}</div>
+          <div class="log-meta">
+            <span class="log-time"><span class="material-icons" aria-hidden="true">schedule</span>${formatarDataHora(l.timestamp)}</span>
+            <span><span class="material-icons" aria-hidden="true">person</span>${escaparHtml(l.usuario || 'Desconhecido')}</span>
+            <span><span class="material-icons" aria-hidden="true">public</span>${escaparHtml(l.ip || '-/-')}</span>
+          </div>
+        </div>
+      `).join('')}
+    </div>`;
 }
 
 async function carregarPerfil() {
@@ -2153,7 +2763,10 @@ async function carregarPerfil() {
     if (res.ok) {
       const user = await res.json();
       perfilNome.value = user.usuario;
+      if (perfilDisplayName) perfilDisplayName.value = user.displayName || user.usuario;
       if (user.foto) perfilFotoPreview.src = user.foto;
+      usuarioAtual = { ...usuarioAtual, ...user };
+      localStorage.setItem('usuarioAtual', JSON.stringify(usuarioAtual));
     } else {
       console.warn('Não foi possível carregar perfil:', res.status);
     }

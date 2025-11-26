@@ -23,7 +23,7 @@ const xssClean = require("xss-clean");
 const sanitizeHtml = require("sanitize-html");
 const UAParser = require("ua-parser-js");
 const bcrypt = require("bcrypt");
-const { randomBytes } = require("crypto");
+const { randomBytes, createHash } = require("crypto");
 const rateLimit = require("express-rate-limit");
 const hpp = require("hpp");
 const fsSync = require("fs");
@@ -32,9 +32,9 @@ const app = express();
 const APP_VERSION = '2.0.10';
 const SERVER_INSTANCE = randomBytes(4).toString('hex');
 const IS_PROD = process.env.NODE_ENV === 'production';
-const DOMAIN = process.env.DOMAIN || 'start.devlimassh.shop';
-const SSL_KEY_PATH = process.env.SSL_KEY_PATH || '/etc/letsencrypt/live/start.devlimassh.shop/privkey.pem';
-const SSL_CERT_PATH = process.env.SSL_CERT_PATH || '/etc/letsencrypt/live/start.devlimassh.shop/fullchain.pem';
+const DOMAIN = process.env.DOMAIN || 'start.devlima.wtf';
+const SSL_KEY_PATH = process.env.SSL_KEY_PATH || '/etc/letsencrypt/live/start.devlima.wtf/privkey.pem';
+const SSL_CERT_PATH = process.env.SSL_CERT_PATH || '/etc/letsencrypt/live/start.devlima.wtf/fullchain.pem';
 const USE_HTTPS = fsSync.existsSync(SSL_KEY_PATH) && fsSync.existsSync(SSL_CERT_PATH);
 
 let browserInstance = null;
@@ -143,6 +143,108 @@ function broadcast(event, data = {}) {
   sseClients.forEach(res => res.write(payload));
 }
 
+const DATA_FILES = [
+  path.join(__dirname, 'data', 'produtos.json'),
+  path.join(__dirname, 'data', 'orcamentos.json'),
+  path.join(__dirname, 'data', 'usuarios.json'),
+  path.join(__dirname, 'data', 'logs.json'),
+];
+const TEMPLATES_DIR = path.join(__dirname, 'templates');
+
+const dataFileHashes = new Map();
+
+async function computeDataFileHash(filePath) {
+  try {
+    const buffer = await fs.readFile(filePath);
+    return createHash('sha1').update(buffer).digest('hex');
+  } catch (err) {
+    console.error(`Erro ao calcular hash do arquivo ${filePath}:`, err);
+    return null;
+  }
+}
+
+async function emitDataFileChange(filePath) {
+  const newHash = await computeDataFileHash(filePath);
+  const previousHash = dataFileHashes.get(filePath);
+  if (!newHash || newHash === previousHash) {
+    return;
+  }
+  dataFileHashes.set(filePath, newHash);
+  broadcast('data-files-changed', { file: path.basename(filePath) });
+}
+
+async function computeTemplateDirSignature() {
+  try {
+    const entries = await fs.readdir(TEMPLATES_DIR, { withFileTypes: true });
+    const templates = await Promise.all(
+      entries
+        .filter((entry) => entry.isFile() && entry.name.endsWith('.html'))
+        .map(async (entry) => {
+          const fullPath = path.join(TEMPLATES_DIR, entry.name);
+          const stats = await fs.stat(fullPath);
+          return `${entry.name}:${stats.size}:${stats.mtimeMs}`;
+        })
+    );
+    const signature = templates.sort().join('|');
+    return createHash('sha1').update(signature).digest('hex');
+  } catch (err) {
+    console.error('Erro ao calcular assinatura dos templates:', err);
+    return null;
+  }
+}
+
+async function emitTemplateDirChange() {
+  const newHash = await computeTemplateDirSignature();
+  const previousHash = dataFileHashes.get(TEMPLATES_DIR);
+  if (!newHash || newHash === previousHash) {
+    return;
+  }
+  dataFileHashes.set(TEMPLATES_DIR, newHash);
+  broadcast('templates-updated');
+  broadcast('data-files-changed', { file: 'templates' });
+}
+
+async function initializeDataWatchers() {
+  await Promise.all(
+    DATA_FILES.map(async (filePath) => {
+      if (!fsSync.existsSync(filePath)) {
+        return;
+      }
+      const hash = await computeDataFileHash(filePath);
+      if (hash) {
+        dataFileHashes.set(filePath, hash);
+      }
+      fsSync.watchFile(filePath, { interval: 1000 }, () => {
+        emitDataFileChange(filePath).catch((err) => {
+          console.error(`Erro ao monitorar alterações em ${filePath}:`, err);
+        });
+      });
+    })
+  );
+
+  if (fsSync.existsSync(TEMPLATES_DIR)) {
+    const templateHash = await computeTemplateDirSignature();
+    if (templateHash) {
+      dataFileHashes.set(TEMPLATES_DIR, templateHash);
+    }
+
+    let templateWatchTimeout = null;
+    fsSync.watch(TEMPLATES_DIR, (eventType, filename) => {
+      if (filename && !filename.endsWith('.html')) {
+        return;
+      }
+      if (templateWatchTimeout) {
+        clearTimeout(templateWatchTimeout);
+      }
+      templateWatchTimeout = setTimeout(() => {
+        emitTemplateDirChange().catch((err) => {
+          console.error('Erro ao monitorar alterações em templates:', err);
+        });
+      }, 150);
+    });
+  }
+}
+
 app.get('/api/events', authRequired, (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -154,6 +256,10 @@ app.get('/api/events', authRequired, (req, res) => {
     const idx = sseClients.indexOf(res);
     if (idx !== -1) sseClients.splice(idx, 1);
   });
+});
+
+initializeDataWatchers().catch((err) => {
+  console.error('Falha ao iniciar monitoramento dos arquivos de dados:', err);
 });
 
 const loginLimiter = IS_PROD
@@ -311,6 +417,11 @@ async function lerArquivoJSON(filePath) {
 async function escreverArquivoJSON(filePath, data) {
   try {
     await fs.writeFile(filePath, JSON.stringify(data, null, 2), "utf8");
+    try {
+      await emitDataFileChange(filePath);
+    } catch (notifyError) {
+      console.error(`Erro ao notificar alteração do arquivo ${filePath}:`, notifyError);
+    }
     return true;
   } catch (error) {
     console.error(`Erro ao escrever arquivo ${filePath}:`, error);
@@ -370,12 +481,215 @@ async function salvarUsuarios(lista) {
   await escreverArquivoJSON(usuariosPath, lista);
 }
 
+function tentarConverterParaData(valor) {
+  if (!valor) return null;
+  if (valor instanceof Date && !Number.isNaN(valor.getTime())) return valor;
+
+  let tentativa = null;
+
+  if (typeof valor === 'number') {
+    tentativa = new Date(valor);
+  } else if (typeof valor === 'string') {
+    const trimmed = valor.trim();
+    if (trimmed) {
+      tentativa = new Date(trimmed);
+      if (Number.isNaN(tentativa.getTime())) {
+        const numerico = Number(trimmed);
+        if (!Number.isNaN(numerico)) {
+          tentativa = new Date(numerico);
+        }
+      }
+    }
+  }
+
+  if (tentativa && !Number.isNaN(tentativa.getTime())) return tentativa;
+  return null;
+}
+
+function construirDataIso(item) {
+  const candidatos = [
+    item?.timestamp,
+    item?.dataHora,
+    item?.data_hora,
+    item?.data,
+    item?.date,
+  ];
+
+  for (const candidato of candidatos) {
+    const data = tentarConverterParaData(candidato);
+    if (data) return data.toISOString();
+  }
+
+  if (item?.data && item?.hora) {
+    const composto = `${item.data} ${item.hora}`;
+    const data = tentarConverterParaData(composto);
+    if (data) return data.toISOString();
+  }
+
+  return new Date().toISOString();
+}
+
+function normalizarUsuario(item) {
+  const candidatos = [item?.usuario, item?.user, item?.login, item?.nome, item?.username];
+  for (const candidato of candidatos) {
+    if (typeof candidato === 'string' && candidato.trim()) {
+      return candidato.trim();
+    }
+  }
+  return 'desconhecido';
+}
+
+function normalizarDescricao(item) {
+  const candidatos = [item?.descricao, item?.acao, item?.mensagem, item?.message, item?.evento];
+  for (const candidato of candidatos) {
+    if (typeof candidato === 'string' && candidato.trim()) {
+      return candidato.trim();
+    }
+  }
+  return '';
+}
+
+function normalizarIP(item) {
+  const candidatos = [item?.ip, item?.ipAddress, item?.enderecoIP, item?.host];
+  for (const candidato of candidatos) {
+    if (typeof candidato === 'string' && candidato.trim()) {
+      return candidato.trim();
+    }
+  }
+  return '';
+}
+
+function normalizarUserId(item) {
+  const candidatos = [item?.userId, item?.usuarioId, item?.idUsuario];
+  for (const candidato of candidatos) {
+    if (candidato === null || candidato === undefined) continue;
+    if (typeof candidato === 'string' && candidato.trim()) {
+      return candidato.trim();
+    }
+    if (typeof candidato === 'number' && Number.isFinite(candidato)) {
+      return String(candidato);
+    }
+  }
+  return null;
+}
+
 async function obterLogs() {
-  return lerArquivoJSON(logsPath);
+  const bruto = await lerArquivoJSON(logsPath);
+  if (!Array.isArray(bruto)) return [];
+
+  const { nanoid } = await import('nanoid');
+  let precisaSalvar = false;
+  const normalizados = [];
+
+  for (const item of bruto) {
+    if (!item || typeof item !== 'object') {
+      precisaSalvar = true;
+      continue;
+    }
+
+    const registro = {
+      id: typeof item.id === 'string' && item.id.trim() ? item.id.trim() : nanoid(8),
+      timestamp: construirDataIso(item),
+      usuario: normalizarUsuario(item),
+      userId: normalizarUserId(item),
+      ip: normalizarIP(item),
+      descricao: normalizarDescricao(item),
+    };
+
+    if (!item.id || item.timestamp !== registro.timestamp || item.usuario !== registro.usuario ||
+      item.userId !== registro.userId || item.ip !== registro.ip || item.descricao !== registro.descricao) {
+      precisaSalvar = true;
+    }
+
+    normalizados.push(registro);
+  }
+
+  const ordenados = [...normalizados].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+  const mesmaOrdem = ordenados.length === normalizados.length && ordenados.every((log, idx) => log.id === normalizados[idx].id);
+  if (!mesmaOrdem) {
+    precisaSalvar = true;
+  }
+
+  if (precisaSalvar) {
+    await escreverArquivoJSON(logsPath, ordenados);
+  }
+
+  return ordenados;
 }
 
 async function salvarLogs(lista) {
   await escreverArquivoJSON(logsPath, lista);
+}
+
+async function listarTemplatesDisponiveis() {
+  try {
+    const templatesDir = path.join(__dirname, "templates");
+    const arquivos = await fs.readdir(templatesDir);
+    return arquivos.filter((arquivo) => arquivo.endsWith('.html'));
+  } catch (err) {
+    return [];
+  }
+}
+
+async function normalizarTemplatesPermitidos(valor) {
+  if (valor === undefined) return undefined;
+
+  let lista = valor;
+  if (typeof lista === 'string') {
+    if (!lista.trim()) {
+      lista = [];
+    } else {
+      try {
+        lista = JSON.parse(lista);
+      } catch (err) {
+        lista = lista.split(',').map((item) => item.trim()).filter(Boolean);
+      }
+    }
+  }
+
+  if (!Array.isArray(lista)) {
+    lista = [];
+  }
+
+  const disponiveis = await listarTemplatesDisponiveis();
+  if (disponiveis.length === 0) {
+    return undefined;
+  }
+
+  const set = new Set();
+  for (const item of lista) {
+    if (typeof item !== 'string') continue;
+    if (!item.endsWith('.html')) continue;
+    if (item.includes('..') || item.includes('/')) continue;
+    if (!disponiveis.includes(item)) continue;
+    set.add(item);
+  }
+
+  return Array.from(set);
+}
+
+function mapearUsuarioParaResposta(usuario) {
+  if (!usuario) return null;
+  const { senha, ...restante } = usuario;
+  return {
+    ...restante,
+    displayName: usuario.displayName || usuario.usuario,
+    allowedTemplates: Array.isArray(usuario.allowedTemplates)
+      ? usuario.allowedTemplates
+      : undefined,
+  };
+}
+
+function formatarNomeTemplate(arquivo) {
+  return arquivo
+    .replace('.html', '')
+    .replace(/[_-]+/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .map((palavra) => palavra.length <= 2
+      ? palavra.toUpperCase()
+      : palavra.charAt(0).toUpperCase() + palavra.slice(1).toLowerCase())
+    .join(' ');
 }
 
 async function registrarAcao(req, descricao) {
@@ -390,9 +704,10 @@ async function registrarAcao(req, descricao) {
       ip: req.ip,
       descricao,
     };
-    logs.push(entry);
+    logs.unshift(entry);
     await salvarLogs(logs);
     console.log(`[LOG] ${entry.timestamp} - ${entry.usuario} (${entry.ip}): ${descricao}`);
+    broadcast('registros-updated', { entryId: entry.id });
   } catch (err) {
     console.error('Erro ao registrar ação:', err);
   }
@@ -429,10 +744,17 @@ app.post("/api/login", loginLimiter, async (req, res) => {
     console.log(`[LOGIN FAIL] ${ip} - senha incorreta para "${usuario}" via ${deviceInfo}`);
     return res.status(401).json({ erro: "Usuário ou senha incorretos" });
   }
-  req.session.usuario = { id: found.id, usuario: found.usuario, admin: found.admin };
+  const usuarioResposta = mapearUsuarioParaResposta(found);
+  req.session.usuario = {
+    id: found.id,
+    usuario: found.usuario,
+    admin: found.admin,
+    displayName: usuarioResposta.displayName,
+    allowedTemplates: usuarioResposta.allowedTemplates,
+  };
   console.log(`[LOGIN OK] ${ip} - usuário "${usuario}" logado usando ${deviceInfo}`);
   await registrarAcao(req, 'Login realizado');
-  res.json({ id: found.id, usuario: found.usuario, admin: found.admin });
+  res.json(usuarioResposta);
 });
 
 app.post("/api/logout", (req, res) => {
@@ -442,8 +764,24 @@ app.post("/api/logout", (req, res) => {
   });
 });
 
-app.get("/api/session", (req, res) => {
+app.get("/api/session", async (req, res) => {
   if (req.session.usuario) {
+    const usuarios = await obterUsuarios();
+    const atual = usuarios.find((u) => u.id === req.session.usuario.id);
+    if (!atual) {
+      req.session.destroy(() => {});
+      res.clearCookie('connect.sid');
+      return res.json({ autenticado: false });
+    }
+    const usuarioResposta = mapearUsuarioParaResposta(atual);
+    req.session.usuario = {
+      id: usuarioResposta.id || req.session.usuario.id,
+      usuario: usuarioResposta.usuario || req.session.usuario.usuario,
+      admin: !!usuarioResposta.admin,
+      displayName: usuarioResposta.displayName || req.session.usuario.displayName,
+      allowedTemplates: usuarioResposta.allowedTemplates,
+      foto: usuarioResposta.foto || req.session.usuario.foto || null,
+    };
     res.json({ autenticado: true, usuario: req.session.usuario });
   } else {
     res.json({ autenticado: false });
@@ -459,12 +797,14 @@ app.get("/api/usuarios/me", authRequired, async (req, res) => {
   const usuarios = await obterUsuarios();
   const user = usuarios.find(u => u.id === req.session.usuario.id);
   if (!user) return res.status(404).json({ erro: "Usuário não encontrado" });
-  const { senha, ...semSenha } = user;
-  res.json(semSenha);
+  const resposta = mapearUsuarioParaResposta(user);
+  req.session.usuario.displayName = resposta.displayName;
+  req.session.usuario.allowedTemplates = resposta.allowedTemplates;
+  res.json(resposta);
 });
 
 app.put("/api/usuarios/me", authRequired, upload.single("foto"), async (req, res) => {
-  const { usuario, senha } = req.body;
+  const { usuario, senha, displayName } = req.body;
   const usuarios = await obterUsuarios();
   const index = usuarios.findIndex(u => u.id === req.session.usuario.id);
   if (index === -1) return res.status(404).json({ erro: "Usuário não encontrado" });
@@ -475,6 +815,13 @@ app.put("/api/usuarios/me", authRequired, upload.single("foto"), async (req, res
     usuarios[index].usuario = usuario;
     req.session.usuario.usuario = usuario;
   }
+  if (displayName !== undefined) {
+    if (!displayName.trim()) {
+      return res.status(400).json({ erro: "Nome do vendedor não pode ficar vazio" });
+    }
+    usuarios[index].displayName = displayName.trim();
+    req.session.usuario.displayName = usuarios[index].displayName;
+  }
   if (senha) usuarios[index].senha = await bcrypt.hash(senha, 10);
   if (req.file) {
     const buffer = await toWebp(req.file.buffer);
@@ -482,23 +829,31 @@ app.put("/api/usuarios/me", authRequired, upload.single("foto"), async (req, res
     usuarios[index].foto = `data:image/webp;base64,${buffer.toString('base64')}`;
   }
   await salvarUsuarios(usuarios);
-  const { senha: s, ...updatedUser } = usuarios[index];
-  res.json(updatedUser);
+  const resposta = mapearUsuarioParaResposta(usuarios[index]);
+  req.session.usuario.allowedTemplates = resposta.allowedTemplates;
+  await registrarAcao(req, 'Atualizou o próprio perfil');
+  broadcast('usuarios-updated', { type: 'self-updated', userId: usuarios[index].id });
+  res.json(resposta);
 });
 
 // CRUD de usuários (admin)
 app.get("/api/usuarios", authRequired, adminRequired, async (req, res) => {
   const usuarios = await obterUsuarios();
-  const semSenha = usuarios.map(({ senha, ...rest }) => rest);
-  res.json(semSenha);
+  const resposta = usuarios.map(mapearUsuarioParaResposta);
+  res.json(resposta);
 });
 
 app.post("/api/usuarios", authRequired, adminRequired, upload.single("foto"), async (req, res) => {
-  const { usuario, senha, admin } = req.body;
+  const { usuario, senha, admin, displayName } = req.body;
   if (!usuario || !senha) return res.status(400).json({ erro: "Dados inválidos" });
   const usuarios = await obterUsuarios();
   if (usuarios.find((u) => u.usuario === usuario)) {
     return res.status(400).json({ erro: "Usuário já existe" });
+  }
+  const allowedTemplates = await normalizarTemplatesPermitidos(req.body.allowedTemplates);
+  const nomeVendedor = (displayName ?? usuario).toString().trim();
+  if (!nomeVendedor) {
+    return res.status(400).json({ erro: "Nome do vendedor inválido" });
   }
   const { nanoid } = await import("nanoid");
   const novo = {
@@ -507,7 +862,11 @@ app.post("/api/usuarios", authRequired, adminRequired, upload.single("foto"), as
     senha: await bcrypt.hash(senha, 10),
     admin: admin === true || admin === "true" || admin === "1" || admin === 1,
     foto: null,
+    displayName: nomeVendedor,
   };
+  if (allowedTemplates !== undefined) {
+    novo.allowedTemplates = allowedTemplates;
+  }
   if (req.file) {
     const buffer = await toWebp(req.file.buffer);
     req.file.buffer = null;
@@ -517,12 +876,12 @@ app.post("/api/usuarios", authRequired, adminRequired, upload.single("foto"), as
   await salvarUsuarios(usuarios);
   const isAdmin = novo.admin;
   await registrarAcao(req, `Criou usuário ${usuario} (admin=${isAdmin})`);
-  broadcast('usuarios-updated');
-  res.status(201).json({ id: novo.id, usuario: novo.usuario, admin: novo.admin });
+  broadcast('usuarios-updated', { type: 'created', userId: novo.id });
+  res.status(201).json(mapearUsuarioParaResposta(novo));
 });
 
 app.put("/api/usuarios/:id", authRequired, adminRequired, upload.single("foto"), async (req, res) => {
-  const { usuario, senha, admin } = req.body;
+  const { usuario, senha, admin, displayName } = req.body;
   const usuarios = await obterUsuarios();
   const index = usuarios.findIndex((u) => u.id === req.params.id);
   if (index === -1) return res.status(404).json({ erro: "Usuário não encontrado" });
@@ -532,9 +891,19 @@ app.put("/api/usuarios/:id", authRequired, adminRequired, upload.single("foto"),
     }
     usuarios[index].usuario = usuario;
   }
+  if (displayName !== undefined) {
+    if (!displayName.trim()) {
+      return res.status(400).json({ erro: "Nome do vendedor não pode ficar vazio" });
+    }
+    usuarios[index].displayName = displayName.trim();
+  }
   if (senha) usuarios[index].senha = await bcrypt.hash(senha, 10);
   if (admin !== undefined) {
     usuarios[index].admin = admin === true || admin === "true" || admin === "1" || admin === 1;
+  }
+  const allowedTemplates = await normalizarTemplatesPermitidos(req.body.allowedTemplates);
+  if (allowedTemplates !== undefined) {
+    usuarios[index].allowedTemplates = allowedTemplates;
   }
   if (req.file) {
     const buffer = await toWebp(req.file.buffer);
@@ -542,18 +911,31 @@ app.put("/api/usuarios/:id", authRequired, adminRequired, upload.single("foto"),
     usuarios[index].foto = `data:image/webp;base64,${buffer.toString('base64')}`;
   }
   await salvarUsuarios(usuarios);
-  broadcast('usuarios-updated');
-  const { senha: s, ...usuarioResp } = usuarios[index];
-  res.json(usuarioResp);
+  await registrarAcao(req, `Atualizou usuário ${usuarios[index].usuario}`);
+  broadcast('usuarios-updated', { type: 'updated', userId: usuarios[index].id });
+  const resposta = mapearUsuarioParaResposta(usuarios[index]);
+  if (req.session.usuario.id === usuarios[index].id) {
+    req.session.usuario = {
+      ...req.session.usuario,
+      usuario: resposta.usuario,
+      admin: resposta.admin,
+      displayName: resposta.displayName,
+      allowedTemplates: resposta.allowedTemplates,
+      foto: resposta.foto || req.session.usuario.foto || null,
+    };
+  }
+  res.json(resposta);
 });
 
 app.delete("/api/usuarios/:id", authRequired, adminRequired, async (req, res) => {
   const usuarios = await obterUsuarios();
   const index = usuarios.findIndex((u) => u.id === req.params.id);
   if (index === -1) return res.status(404).json({ erro: "Usuário não encontrado" });
+  const removido = usuarios[index];
   usuarios.splice(index, 1);
   await salvarUsuarios(usuarios);
-  broadcast('usuarios-updated');
+  await registrarAcao(req, `Removeu usuário ${removido.usuario}`);
+  broadcast('usuarios-updated', { type: 'deleted', userId: removido.id });
   res.json({ mensagem: "Usuário removido" });
 });
 
@@ -686,7 +1068,7 @@ app.get("/api/templates", async (req, res, next) => {
     const arquivos = await fs.readdir(templatesDir);
     const templates = arquivos
       .filter((arquivo) => arquivo.endsWith(".html"))
-      .map((arquivo) => ({ id: arquivo, nome: arquivo.replace(".html", "") }));
+      .map((arquivo) => ({ id: arquivo, nome: formatarNomeTemplate(arquivo) }));
     res.json(templates);
   } catch (error) {
     if (error.code === "ENOENT") {
@@ -796,6 +1178,14 @@ app.post("/api/orcamentos", authRequired, async (req, res, next) => {
       await fs.access(path.join(__dirname, "templates", templateId));
     } catch (error) {
       return res.status(400).json({ erro: `Template ${templateId} não encontrado` });
+    }
+
+    const usuarios = await obterUsuarios();
+    const usuarioCriador = usuarios.find((u) => u.id === req.session.usuario.id);
+    if (!req.session.usuario.admin && usuarioCriador && Array.isArray(usuarioCriador.allowedTemplates) && usuarioCriador.allowedTemplates.length > 0) {
+      if (!usuarioCriador.allowedTemplates.includes(templateId)) {
+        return res.status(403).json({ erro: "Você não tem permissão para usar este template" });
+      }
     }
 
     const todosProdutosCadastrados = await lerArquivoJSON(path.join(__dirname, "data", "produtos.json"));
@@ -922,6 +1312,14 @@ app.put("/api/orcamentos/:id", authRequired, async (req, res, next) => {
       await fs.access(path.join(__dirname, "templates", templateId));
     } catch (error) {
       return res.status(400).json({ erro: `Template ${templateId} não encontrado` });
+    }
+
+    const usuarios = await obterUsuarios();
+    const usuarioAtual = usuarios.find((u) => u.id === req.session.usuario.id);
+    if (!req.session.usuario.admin && usuarioAtual && Array.isArray(usuarioAtual.allowedTemplates) && usuarioAtual.allowedTemplates.length > 0) {
+      if (!usuarioAtual.allowedTemplates.includes(templateId)) {
+        return res.status(403).json({ erro: "Você não tem permissão para usar este template" });
+      }
     }
 
     const produtosCadastrados = await lerArquivoJSON(path.join(__dirname, "data", "produtos.json"));
@@ -1053,7 +1451,7 @@ async function renderizarHtmlOrcamento(orcamentoId) {
   try {
       const usuarios = await obterUsuarios();
       const vendedor = usuarios.find(u => u.id === orcamento.userId);
-      if (vendedor) vendedorNome = vendedor.usuario;
+      if (vendedor) vendedorNome = vendedor.displayName || vendedor.usuario;
   } catch (vendError) {
       console.warn("Não foi possível determinar o vendedor do orçamento:", vendError);
   }

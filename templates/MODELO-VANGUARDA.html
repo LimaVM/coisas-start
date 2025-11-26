@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Proposta Comercial <%= orcamento.id %></title>
+  <style>
+    :root {
+      --accent: #2563eb;
+      --accent-dark: #1d4ed8;
+      --text-dark: #0f172a;
+      --text-muted: #475569;
+      --surface: #f8fafc;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      margin: 0;
+      padding: 0;
+      color: var(--text-dark);
+      background: #fff;
+    }
+    .wrapper {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 32px;
+    }
+    .hero {
+      background: linear-gradient(135deg, var(--accent), var(--accent-dark));
+      color: #fff;
+      padding: 32px;
+      border-radius: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+    .hero-logo img {
+      max-height: 80px;
+      border-radius: 12px;
+      background: rgba(255,255,255,0.08);
+      padding: 8px;
+    }
+    .hero-info {
+      flex: 1;
+    }
+    .hero-info h1 {
+      margin: 0;
+      font-size: 26px;
+      letter-spacing: 0.5px;
+    }
+    .hero-info p {
+      margin: 6px 0 0;
+      font-size: 14px;
+      opacity: 0.9;
+    }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+      margin: 28px 0;
+    }
+    .card {
+      background: var(--surface);
+      padding: 20px;
+      border-radius: 16px;
+      border: 1px solid rgba(15, 23, 42, 0.05);
+      box-shadow: 0 10px 25px rgba(15, 23, 42, 0.08);
+    }
+    .card h2 {
+      margin: 0 0 12px;
+      font-size: 16px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+      color: var(--text-muted);
+    }
+    .card p {
+      margin: 4px 0;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 24px;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+    }
+    col.imagem {
+      width: 90px;
+    }
+    thead {
+      background: var(--surface);
+    }
+    th {
+      text-align: left;
+      padding: 14px;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+    }
+    td {
+      padding: 16px 14px;
+      vertical-align: top;
+      font-size: 14px;
+      color: var(--text-dark);
+    }
+    td.imagem {
+      text-align: center;
+    }
+    td.imagem .thumb {
+      width: 70px;
+      height: 70px;
+      border-radius: 18px;
+      overflow: hidden;
+      margin: 0 auto;
+      background: rgba(148, 163, 184, 0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.35);
+    }
+    td.imagem .thumb img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    tbody tr:nth-child(even) {
+      background: #f1f5f9;
+    }
+    .valor {
+      text-align: right;
+      white-space: nowrap;
+      font-feature-settings: 'tnum';
+    }
+    .qtd {
+      text-align: center;
+      font-weight: 600;
+    }
+    .totais {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+      margin: 28px 0;
+    }
+    .resumo {
+      background: linear-gradient(135deg, rgba(37,99,235,0.1), rgba(37,99,235,0.02));
+      border-left: 4px solid var(--accent);
+      border-radius: 16px;
+      padding: 20px;
+    }
+    .resumo p {
+      margin: 6px 0;
+      font-size: 14px;
+    }
+    .resumo .total {
+      font-size: 20px;
+      font-weight: 700;
+      margin-top: 12px;
+    }
+    .observacoes {
+      margin-top: 24px;
+      padding: 20px;
+      border-radius: 16px;
+      background: #fff7ed;
+      border: 1px solid #fed7aa;
+    }
+    .observacoes h3 {
+      margin: 0 0 12px;
+      font-size: 15px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #c2410c;
+    }
+    .assinatura {
+      margin-top: 40px;
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .assinatura .linha {
+      width: 260px;
+      margin: 0 auto 6px;
+      border-bottom: 1px solid rgba(15, 23, 42, 0.2);
+      padding-top: 32px;
+    }
+    footer {
+      margin-top: 40px;
+      text-align: center;
+      font-size: 12px;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrapper">
+    <section class="hero">
+      <div class="hero-info">
+        <h1><%= vendedor %></h1>
+        <p>Proposta comercial nº <strong><%= referencia %></strong></p>
+        <p>Emitida em <%= orcamento.dataCriacaoFormatada %> • Validade até <%= orcamento.validadeFormatada %></p>
+      </div>
+      <div class="hero-logo">
+        <% if (logoUrl) { %>
+          <img src="<%= logoUrl %>" alt="Logo">
+        <% } %>
+      </div>
+    </section>
+
+    <div class="cards">
+      <div class="card">
+        <h2>Cliente</h2>
+        <p><strong><%= orcamento.nomeCliente %></strong></p>
+        <% if (orcamento.enderecoCliente) { %>
+          <p><%= orcamento.enderecoCliente %></p>
+        <% } %>
+        <% if (orcamento.telefoneCliente || orcamento.emailCliente) { %>
+          <p>
+            <% if (orcamento.telefoneCliente) { %>
+              Tel: <%= orcamento.telefoneCliente %>
+            <% } %>
+            <% if (orcamento.emailCliente) { %>
+              <br>E-mail: <%= orcamento.emailCliente %>
+            <% } %>
+          </p>
+        <% } %>
+        <% if (orcamento.cpfCliente) { %>
+          <p>Documento: <%= orcamento.cpfCliente %></p>
+        <% } %>
+      </div>
+      <div class="card">
+        <h2>Resumo</h2>
+        <p>Forma de pagamento: <strong><%= orcamento.formaPagamento === 'avista' ? 'À vista' : 'Parcelado' %></strong></p>
+        <% if (orcamento.formaPagamento === 'prazo') { %>
+          <p>Parcelas: <%= orcamento.parcelas %>x de <%= orcamento.valorParcelaFormatada %></p>
+        <% } else { %>
+          <p>Modo: <%= orcamento.avistaTipo === 'cartao' ? 'Cartão' : 'Dinheiro' %></p>
+        <% } %>
+        <p>Subtotal: <%= orcamento.valorTotalBrutoFormatado %></p>
+        <% if (orcamento.descontoCalculado > 0) { %>
+          <p>Desconto aplicado: <%= orcamento.valorDescontoCalculadoFormatado %></p>
+        <% } %>
+        <p>Total líquido: <strong><%= orcamento.valorTotalFormatado %></strong></p>
+      </div>
+    </div>
+
+    <table>
+      <colgroup>
+        <col class="imagem">
+        <col>
+        <col>
+        <col>
+        <col>
+        <col>
+      </colgroup>
+      <thead>
+        <tr>
+          <th>Imagem</th>
+          <th>Produto</th>
+          <th>Descrição</th>
+          <th class="qtd">Qtd</th>
+          <th class="valor">Unitário</th>
+          <th class="valor">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% orcamento.itens.forEach((item) => { %>
+          <tr>
+            <td class="imagem">
+              <div class="thumb">
+                <img src="<%= item.imagemUrl || logoUrl %>" alt="Imagem de <%= item.nome %>">
+              </div>
+            </td>
+            <td><strong><%= item.nome %></strong></td>
+            <td><%= item.descricao || '—' %></td>
+            <td class="qtd"><%= item.quantidade %></td>
+            <td class="valor"><%= item.valorUnitarioOriginalFormatado %></td>
+            <td class="valor"><%= item.valorTotalItemFormatado %></td>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+
+    <div class="totais">
+      <div class="resumo">
+        <p>Valor bruto: <strong><%= orcamento.valorTotalBrutoFormatado %></strong></p>
+        <% if (orcamento.descontoCalculado > 0) { %>
+          <p>Desconto concedido: <%= orcamento.valorDescontoCalculadoFormatado %></p>
+        <% } %>
+        <% if (orcamento.valorTotalComJuros && orcamento.valorTotalComJuros !== orcamento.valorTotal) { %>
+          <p>Total com encargos: <%= orcamento.valorTotalComJurosFormatado %></p>
+        <% } %>
+        <p class="total">Total a investir: <%= orcamento.valorTotalFormatado %></p>
+      </div>
+      <div class="resumo">
+        <p>Condições gerais:</p>
+        <p>• Garantia conforme produto (6 a 12 meses).</p>
+        <p>• Prazo de entrega estimado em até 3 dias úteis após confirmação do pedido.</p>
+        <p>• Valores incluem tributos vigentes. Frete e instalação sob consulta.</p>
+        <p>• Proposta válida até <%= orcamento.validadeFormatada %>.</p>
+      </div>
+    </div>
+
+    <% if (orcamento.observacoes) { %>
+      <div class="observacoes">
+        <h3>Observações Adicionais</h3>
+        <p><%= orcamento.observacoes %></p>
+      </div>
+    <% } %>
+
+    <div class="assinatura">
+      <div class="linha"></div>
+      <p><strong><%= vendedor %></strong></p>
+      <p>Responsável comercial</p>
+    </div>
+
+    <footer>
+      Referência da proposta: <%= referencia %> • Emitido automaticamente pelo Start Orçamentos
+    </footer>
+  </div>
+</body>
+</html>

@@ -2,12 +2,14 @@
   {
     "id": "1",
     "usuario": "start",
+    "displayName": "Start do Brasil",
     "senha": "$2b$10$QyYJSvosPSipf19JU5Pd7ulk4Ynm1KRJT4lrAAhuWHsDR/V0AjSmG",
     "admin": true
   },
   {
     "id": "4SuX_m3m",
     "usuario": "devlima",
+    "displayName": "DevLima Soluções",
     "senha": "$2b$10$sKhcVSmC4M0HS1GOlDODguo5wULCykQxm9jI6OVmxA8qSAq7nbj12",
     "admin": true,
     "foto": null
@@ -15,6 +17,7 @@
   {
     "id": "IJdf2dfj",
     "usuario": "Ricardo",
+    "displayName": "Ricardo Consultoria",
     "senha": "$2b$10$yOaeyFGxrqDSE0DaibhGIeKc/xxjlLoaq1Xrupq6GXMkVOf0t0Lam",
     "admin": true,
     "foto": null
